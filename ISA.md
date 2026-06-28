@@ -5,10 +5,10 @@ project: Quarry
 effort: deep
 effort_source: explicit
 phase: execute
-progress: 40/100
+progress: 57/100
 mode: interactive
 started: 2026-06-28T14:15:00Z
-updated: 2026-06-28T16:20:00Z
+updated: 2026-06-28T17:05:00Z
 ---
 
 ## Problem
@@ -102,14 +102,14 @@ Generalise `bin/kb` into **Quarry**: an installable, MIT-licensed, config-driven
 ### Ingest
 
 - [x] ISC-31: `ingest <url>` resolves the first matching enabled adapter.
-- [ ] ISC-32: `ingest` writes immutable raw material at the configured raw path.
-- [ ] ISC-33: `ingest` refuses to clobber existing raw without `--force` (exit ≠ 0).
-- [ ] ISC-34: `ingest` prints a human/agent-readable compile-spec to stdout.
-- [ ] ISC-35: `--topic T` populates `target_wiki_path` in the manifest.
-- [ ] ISC-36: With discovery available and a hit ≥ `dedup_threshold`, `on_duplicate=refuse` aborts ingest (exit ≠ 0).
-- [ ] ISC-37: `on_duplicate=warn` prints a warning and proceeds with ingest.
-- [ ] ISC-38: `on_duplicate=allow` ingests with no dedup interruption.
-- [ ] ISC-39: `--force` bypasses the dedup pre-check.
+- [x] ISC-32: `ingest` writes immutable raw material at the configured raw path.
+- [x] ISC-33: `ingest` refuses to clobber existing raw without `--force` (exit ≠ 0).
+- [x] ISC-34: `ingest` prints a human/agent-readable compile-spec to stdout.
+- [x] ISC-35: `--topic T` populates `target_wiki_path` in the manifest.
+- [x] ISC-36: With discovery available and a hit ≥ `dedup_threshold`, `on_duplicate=refuse` aborts ingest (exit ≠ 0).
+- [x] ISC-37: `on_duplicate=warn` prints a warning and proceeds with ingest.
+- [x] ISC-38: `on_duplicate=allow` ingests with no dedup interruption.
+- [x] ISC-39: `--force` bypasses the dedup pre-check.
 - [x] ISC-40: An adapter exception during fetch surfaces as a clean non-zero quarry error (no traceback).
 
 ### Finish & provenance
@@ -140,15 +140,15 @@ Generalise `bin/kb` into **Quarry**: an installable, MIT-licensed, config-driven
 
 ### Discovery (optional, pluggable)
 
-- [ ] ISC-61: `discovery.available()` returns `False` cleanly when the backend tool is absent.
-- [ ] ISC-62: `backend="none"` disables discovery; `related`/`densify` print a clean message and core flows are unaffected.
-- [ ] ISC-63: `related <article>` prints ranked candidates excluding the article itself.
-- [ ] ISC-64: `related` excludes already-linked articles (frontmatter `related` + body links).
-- [ ] ISC-65: `densify` lists mutual top-K unlinked pairs.
-- [ ] ISC-66: `densify --apply` adds bidirectional `## See also` links.
-- [ ] ISC-67: `densify --topk N` overrides the configured `densify_topk`.
-- [ ] ISC-68: The qmd-output parser turns real `qmd query` stdout into `[(score, path)]` (fixture test).
-- [ ] ISC-69: Missing qmd during `related`/`densify` exits non-zero with a clean install hint, never a traceback.
+- [x] ISC-61: `discovery.available()` returns `False` cleanly when the backend tool is absent.
+- [x] ISC-62: `backend="none"` disables discovery; `related`/`densify` print a clean message and core flows are unaffected.
+- [x] ISC-63: `related <article>` prints ranked candidates excluding the article itself.
+- [x] ISC-64: `related` excludes already-linked articles (frontmatter `related` + body links).
+- [x] ISC-65: `densify` lists mutual top-K unlinked pairs.
+- [x] ISC-66: `densify --apply` adds bidirectional `## See also` links.
+- [x] ISC-67: `densify --topk N` overrides the configured `densify_topk`.
+- [x] ISC-68: The qmd-output parser turns real `qmd query` stdout into `[(score, path)]` (fixture test).
+- [x] ISC-69: Missing qmd during `related`/`densify` exits non-zero with a clean install hint, never a traceback.
 
 ### Adapters & plugins
 
@@ -447,6 +447,21 @@ _No conjecture/refuted-by/learned/criterion-now entries yet — this section acc
 - ISC-75/-76: `test_web_extracts_from_fixture` — trafilatura extraction + metadata from fixture HTML (no network).
 - ISC-77: `test_youtube_live` / `test_web_live` marked `@integration`, excluded by default (confirmed: 2 deselected).
 - ISC-78: `test_youtube_missing_extra` / `test_web_missing_extra` — missing extra → clean install hint, not `ImportError`.
+
+### Checkpoint 4 — Discovery + Ingest (2026-06-28, py3.11.15, dev+all)
+
+- Suite: `116 passed, 2 deselected`; `ruff` clean; coverage TOTAL **93%**. New: `frontmatter.py` 100%, `ingest.py` 100%, `discovery.py` 86% (uncovered = `find_qmd` OS-path fallbacks + real `_run_qmd` subprocess, external-only).
+- **Hermeticity breach caught + fixed:** the basic ingest tests reached a *real* `qmd` installed on the machine (it returned `88% wiki/ai-ml/llm-security.md` from the actual knowledge base). Added an autouse `_hermetic_qmd` fixture neutralising `find_qmd` so no test can touch a real external tool — directly serves ISC-88.
+- ISC-32: `test_ingest_writes_raw_and_manifest` — raw (with frontmatter) + manifest written; sha matches.
+- ISC-33/-39: `test_ingest_refuses_existing_raw`, `test_force_bypasses_dedup`.
+- ISC-34: `test_ingest_prints_compile_spec` (via CLI).
+- ISC-35: `test_ingest_topic_sets_target`.
+- ISC-36/-37/-38: dedup `refuse` aborts / `warn` proceeds / `allow` skips the query entirely.
+- ISC-61/-62: `NoneBackend` unavailable; `check()` → DISABLED/MISSING/OK; CLI prints "disabled" (exit 0) vs "qmd not found" (exit 1).
+- ISC-63/-64: `test_related_excludes_self_and_linked`.
+- ISC-65/-66/-67: `test_densify_pairs_and_apply` (bidirectional, idempotent), `test_densify_topk_limits_neighbours`.
+- ISC-68: `test_parse_qmd_hits`.
+- ISC-69: `test_related_cli_missing_qmd_exits_one` / densify equivalent.
 
 _Remaining ISCs verified at their feature checkpoints._
 

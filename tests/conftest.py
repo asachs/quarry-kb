@@ -19,3 +19,14 @@ def cfg(chtmp: Path):
 
     config.init()
     return config.load(chtmp)
+
+
+@pytest.fixture(autouse=True)
+def _hermetic_qmd(monkeypatch: pytest.MonkeyPatch):
+    """Hermetic by default: never reach a real qmd on the dev machine (ISC-88).
+
+    Tests that want a working backend monkeypatch find_qmd / dedup_hits themselves.
+    """
+    from quarry import discovery
+
+    monkeypatch.setattr(discovery, "find_qmd", lambda: None)

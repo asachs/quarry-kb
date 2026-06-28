@@ -10,7 +10,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from quarry import __version__, config
+from quarry import __version__, config, discovery, ingest
 from quarry.adapters import registry
 from quarry.errors import ConfigError, QuarryError
 
@@ -30,6 +30,68 @@ def cmd_adapters(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_ingest(args: argparse.Namespace) -> int:
+    cfg = config.load()
+    res = ingest.run(cfg, args.url, topic=args.topic, force=args.force)
+    m = res["manifest"]
+    target = res["target_wiki_path"] or f"{cfg.store.wiki}/<topic>/{res['slug']}.md"
+    print(f"✓ raw written: {res['raw_path']}")
+    print(f"✓ manifest:    {cfg.store.manifest_dir}/{res['slug']}.json")
+    print("\nCOMPILE-SPEC (write the wiki article, then run `quarry finish`):")
+    print(f"  slug:             {res['slug']}")
+    print(f"  source:           {m['source_url']}")
+    print(f"  target (suggest): {target}")
+    print(f"  MUST cite source: {cfg.frontmatter.sources_field}: [{m['must_cite_source']}]")
+    print(f"  required frontmatter: {', '.join(m['required_frontmatter'])}")
+    tail = "" if res["target_wiki_path"] else " --article <path>"
+    print(f"\nthen: quarry finish {res['slug']}{tail}")
+    return 0
+
+
+def _discovery_backend_or_exit(cfg) -> object | None:
+    """Resolve the discovery backend; print/raise per status. None => caller returns 0."""
+    backend, status = discovery.check(cfg)
+    if status == discovery.DISABLED:
+        print("discovery is disabled ([discovery] backend = none)")
+        return None
+    if status == discovery.MISSING:
+        raise QuarryError(
+            "qmd not found (optional) — install: npm i -g @tobilu/qmd && qmd embed"
+        )
+    return backend
+
+
+def cmd_related(args: argparse.Namespace) -> int:
+    cfg = config.load()
+    backend = _discovery_backend_or_exit(cfg)
+    if backend is None:
+        return 0
+    cands = discovery.related(cfg, args.article, backend)
+    print(f"Related candidates for {args.article} (not yet linked):")
+    for score, path in cands[: args.limit]:
+        print(f"  {score:3d}%  {path}")
+    if not cands:
+        print("  (none new — already well-linked or no matches)")
+    return 0
+
+
+def cmd_densify(args: argparse.Namespace) -> int:
+    cfg = config.load()
+    backend = _discovery_backend_or_exit(cfg)
+    if backend is None:
+        return 0
+    topk = args.topk if args.topk is not None else cfg.discovery.densify_topk
+    pairs = discovery.densify_pairs(cfg, topk, backend)
+    if not args.apply:
+        print(f"{len(pairs)} mutual-unlinked pairs (use --apply to add bidirectional links):")
+        for (a, b), s in pairs:
+            print(f"  {s:3d}  {a}  <->  {b}")
+        return 0
+    added = discovery.apply_pairs(cfg, pairs)
+    print(f"added {added} links across {len(pairs)} pairs")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="quarry", description="knowledge-ingestion harness")
     p.add_argument("--version", action="version", version=f"quarry {__version__}")
@@ -41,6 +103,22 @@ def build_parser() -> argparse.ArgumentParser:
 
     pa = sub.add_parser("adapters", help="list registered adapters and which are enabled")
     pa.set_defaults(func=cmd_adapters)
+
+    pg = sub.add_parser("ingest", help="fetch a source -> raw/ + compile-manifest")
+    pg.add_argument("url")
+    pg.add_argument("--topic", help="wiki topic dir for the suggested target path")
+    pg.add_argument("--force", action="store_true", help="overwrite raw / bypass dedup")
+    pg.set_defaults(func=cmd_ingest)
+
+    pr = sub.add_parser("related", help="semantic link candidates for an article")
+    pr.add_argument("article", help="wiki article path or name fragment")
+    pr.add_argument("--limit", type=int, default=6)
+    pr.set_defaults(func=cmd_related)
+
+    pd = sub.add_parser("densify", help="whole-wiki sweep for mutual-unlinked pairs")
+    pd.add_argument("--apply", action="store_true", help="add the bidirectional links")
+    pd.add_argument("--topk", type=int, default=None, help="override [discovery] densify_topk")
+    pd.set_defaults(func=cmd_densify)
 
     return p
 
