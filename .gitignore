@@ -1,0 +1,5 @@
+# transient — build reference only, delete after extraction
+EXTRACTION-SOURCE-kb.py
+.quarry/
+__pycache__/
+*.pyc
