@@ -3,7 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "quarry"
+# Distribution name (PyPI). The import package and CLI are both `quarry`; the
+# bare `quarry` distribution name was already taken on PyPI.
+name = "quarry-kb"
 version = "0.1.0"
 description = "A config-driven knowledge-ingestion harness — the deterministic half of turning a source into a linked wiki article."
 readme = "README.md"
@@ -40,7 +42,7 @@ quarry = "quarry.cli:main"
 # Built-in adapters are registered in code; this group is the third-party plugin seam.
 
 [project.urls]
-Homepage = "https://github.com/asachs/quarry"
+Homepage = "https://github.com/asachs/quarry-kb"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/quarry"]

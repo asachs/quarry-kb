@@ -26,4 +26,4 @@ All notable changes to Quarry are documented here. The format follows
 - Extensive hermetic test suite (no network, no API keys) with a ≥90% coverage gate,
   `ruff`, and a Python 3.11–3.13 CI matrix.
 
-[Unreleased]: https://github.com/asachs/quarry/commits/master
+[Unreleased]: https://github.com/asachs/quarry-kb/commits/master

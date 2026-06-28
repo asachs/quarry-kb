@@ -23,9 +23,12 @@ about your wiki's shape. Every convention is configuration.
 ## Install
 
 ```bash
-pip install quarry[youtube,web]     # core + both shipped adapters
-pip install quarry                  # core only (PyYAML); add adapters as extras
+pip install quarry-kb[youtube,web]  # core + both shipped adapters
+pip install quarry-kb               # core only (PyYAML); add adapters as extras
 ```
+
+> Installed as `quarry-kb` on PyPI (the bare name was taken); the command and import
+> are both `quarry`.
 
 Requires Python 3.11+.
 
