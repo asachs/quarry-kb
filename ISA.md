@@ -4,11 +4,11 @@ slug: 20260628-141500_quarry-v1
 project: Quarry
 effort: deep
 effort_source: explicit
-phase: observe
-progress: 0/100
+phase: execute
+progress: 19/100
 mode: interactive
 started: 2026-06-28T14:15:00Z
-updated: 2026-06-28T14:15:00Z
+updated: 2026-06-28T15:05:00Z
 ---
 
 ## Problem
@@ -60,32 +60,32 @@ Generalise `bin/kb` into **Quarry**: an installable, MIT-licensed, config-driven
 ### Packaging & Build
 
 - [ ] ISC-1: `pip install .` in a clean venv exits 0.
-- [ ] ISC-2: The installed `quarry --help` console script runs and exits 0.
-- [ ] ISC-3: `python -m quarry --help` exits 0 (module entry point).
-- [ ] ISC-4: `pyproject.toml` declares `build-backend = "hatchling.build"`.
-- [ ] ISC-5: `pyproject.toml` declares `requires-python = ">=3.11"`.
+- [x] ISC-2: The installed `quarry --help` console script runs and exits 0.
+- [x] ISC-3: `python -m quarry --help` exits 0 (module entry point).
+- [x] ISC-4: `pyproject.toml` declares `build-backend = "hatchling.build"`.
+- [x] ISC-5: `pyproject.toml` declares `requires-python = ">=3.11"`.
 - [ ] ISC-6: The core install pulls exactly one runtime dependency, `PyYAML` (probe: fresh-venv `pip list` minus pip/setuptools = `[quarry, PyYAML]`).
 - [ ] ISC-7: Extras `[youtube]`, `[web]`, `[discovery]`, `[all]`, `[dev]` are declared and each installs without error.
-- [ ] ISC-8: A `LICENSE` file is present and is the MIT license text.
+- [x] ISC-8: A `LICENSE` file is present and is the MIT license text.
 
 ### Config & init
 
-- [ ] ISC-9: `quarry init` in an empty dir writes a `quarry.toml`.
-- [ ] ISC-10: The scaffolded `quarry.toml` is fully commented — every config table carries an explanatory comment.
-- [ ] ISC-11: `quarry init` ensures `.quarry/` is in `.gitignore` (creating `.gitignore` if absent).
-- [ ] ISC-12: `quarry init` refuses to overwrite an existing `quarry.toml` (exit ≠ 0, clean message) unless `--force`.
-- [ ] ISC-13: Config parsing uses native `tomllib`; no `tomli` import exists anywhere (probe: `rg "import tomli\b"` → 0 hits).
-- [ ] ISC-14: Any command run with no `quarry.toml` found exits **2** with `quarry: no quarry.toml found (run 'quarry init')`.
-- [ ] ISC-15: Unknown config keys produce a warning to stderr but do not fail the load.
-- [ ] ISC-16: A config type error (e.g. string where int expected) fails with exit **2** and a field-named message.
-- [ ] ISC-17: Loading a minimal `quarry.toml` (only `[store]`) succeeds with every other field defaulted.
-- [ ] ISC-18: The `Config` dataclass is the sole carrier of conventions — only `config.py` reads `tomllib`/raw config (probe: `rg "tomllib" src/quarry` → only `config.py`).
-- [ ] ISC-19: A `[tool.quarry]` table in `pyproject.toml` is honored as a fallback when no standalone `quarry.toml` exists.
+- [x] ISC-9: `quarry init` in an empty dir writes a `quarry.toml`.
+- [x] ISC-10: The scaffolded `quarry.toml` is fully commented — every config table carries an explanatory comment.
+- [x] ISC-11: `quarry init` ensures `.quarry/` is in `.gitignore` (creating `.gitignore` if absent).
+- [x] ISC-12: `quarry init` refuses to overwrite an existing `quarry.toml` (exit ≠ 0, clean message) unless `--force`.
+- [x] ISC-13: Config parsing uses native `tomllib`; no `tomli` import exists anywhere (probe: `rg "import tomli\b"` → 0 hits).
+- [x] ISC-14: Any command run with no `quarry.toml` found exits **2** with `quarry: no quarry.toml found (run 'quarry init')`.
+- [x] ISC-15: Unknown config keys produce a warning to stderr but do not fail the load.
+- [x] ISC-16: A config type error (e.g. string where int expected) fails with exit **2** and a field-named message.
+- [x] ISC-17: Loading a minimal `quarry.toml` (only `[store]`) succeeds with every other field defaulted.
+- [x] ISC-18: The `Config` dataclass is the sole carrier of conventions — only `config.py` reads `tomllib`/raw config (probe: `rg "tomllib" src/quarry` → only `config.py`).
+- [x] ISC-19: A `[tool.quarry]` table in `pyproject.toml` is honored as a fallback when no standalone `quarry.toml` exists.
 
 ### Store & root discovery
 
 - [ ] ISC-20: Store root is discovered by walking up from CWD to the directory containing `quarry.toml`.
-- [ ] ISC-21: An explicit `[store] root` in config overrides walk-up discovery.
+- [x] ISC-21: An explicit `[store] root` in config overrides walk-up discovery.
 - [ ] ISC-22: Store path resolution works in a non-git directory (git is not required).
 - [ ] ISC-23: All `raw_layout` tokens — `{year} {month} {date} {slug} {kebab_title} {ext} {topic} {source_id}` — expand correctly.
 - [ ] ISC-24: Changing `raw_layout` in config changes the written raw path accordingly (config-matrix test).
@@ -164,8 +164,8 @@ Generalise `bin/kb` into **Quarry**: an installable, MIT-licensed, config-driven
 
 ### CLI & errors
 
-- [ ] ISC-79: `quarry <unknown-command>` exits non-zero with usage text.
-- [ ] ISC-80: Exit codes are honored across paths: 0 success, 1 operational error, 2 config error.
+- [x] ISC-79: `quarry <unknown-command>` exits non-zero with usage text.
+- [x] ISC-80: Exit codes are honored across paths: 0 success, 1 operational error, 2 config error.
 - [ ] ISC-81: Every command responds to `--help`.
 - [ ] ISC-82: `doctor` reports config validity plus optional deps/tools (git, qmd, adapter deps).
 - [ ] ISC-83: Every user-facing error class prints a one-line message, never a traceback (probe: induce each).
@@ -406,7 +406,21 @@ _No conjecture/refuted-by/learned/criterion-now entries yet — this section acc
 
 ## Verification
 
-_Empty until the VERIFY phase. Each checked ISC will be backed here by quoted command output, file content, or a test-run excerpt._
+### Checkpoint 1 — ConfigAndInit (2026-06-28, py3.11.15)
+
+- Suite: `34 passed in 0.13s`; `ruff check .` → `All checks passed!`; `coverage report --fail-under=90` → TOTAL **96%** (config.py 96%, cli.py 100%).
+- ISC-2: `quarry --version` (installed console script) → `quarry 0.1.0`, exit 0.
+- ISC-3: `tests/test_cli.py::test_module_entry_point` — `python -m quarry --help` returns 0.
+- ISC-4/-5: `pyproject.toml` → `build-backend = "hatchling.build"`, `requires-python = ">=3.11"`.
+- ISC-8: `LICENSE` present, MIT text.
+- ISC-9/-11/-12: smoke run — `quarry init` wrote `quarry.toml` + gitignored `.quarry/`; second `init` → `quarry: error: quarry.toml already exists ... (use --force ...)`, exit 1.
+- ISC-10: `test_init_template_is_fully_commented` — every table commented (caught + fixed a missing `[finish]` comment).
+- ISC-13/-18: `test_no_tomli_backport_anywhere`, `test_only_config_reads_tomllib` (only `config.py`).
+- ISC-14: `test_missing_config_exit_2` — stderr exactly `quarry: no quarry.toml found (run 'quarry init')`, exit 2.
+- ISC-15/-16/-17/-19/-21: covered by `tests/test_config.py` (unknown-key warn, type+enum errors, minimal defaults, `[tool.quarry]` fallback, explicit root).
+- ISC-79/-80: `test_unknown_command_errors` (non-zero), exit-code paths 0/1/2 all exercised.
+
+_Remaining ISCs verified at their feature checkpoints._
 
 <!--
 Quarry project ISA, E4, all twelve sections. Generalises the private bin/kb (728 lines) into a public, config-driven, tested package. 100 ISCs across packaging, config/init, store, manifest seam, ingest, finish/provenance, lint, discovery, adapters/plugins, CLI, testing gates, CI, docs/hygiene. Anti-criteria (ISC-96..100) cover the load-bearing invariants: no LLM, no personal data, no hardcoded conventions, graceful optional-dep degrade, no-keys/no-network testability. No antecedents — the goal is verifiable (build/test/install/lint), not experiential. ISC count under the E4 floor is justified in Decisions. Changelog + Verification intentionally empty at OBSERVE per the empty-section rule.
