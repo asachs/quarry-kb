@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+      - name: Set up Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
+      - name: Lint
+        run: uv run --python ${{ matrix.python-version }} --extra dev ruff check .
+      - name: Test (hermetic, no network) + coverage gate
+        run: |
+          uv run --python ${{ matrix.python-version }} --extra dev --extra all \
+            python -m coverage run -m pytest -q
+          uv run --python ${{ matrix.python-version }} --extra dev --extra all \
+            python -m coverage report --fail-under=90
+      - name: Coverage XML
+        run: uv run --python ${{ matrix.python-version }} --extra dev python -m coverage xml
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.python-version }}
+          path: coverage.xml
+
+  # Live network tests for the adapters — manual/nightly only, never in the default gate.
+  integration:
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv python install 3.12
+      - name: Integration tests
+        run: uv run --python 3.12 --extra dev --extra all python -m pytest -m integration -q
+
+  # Tagged-release publish to PyPI via trusted publishing. DEFERRED: wired but only
+  # fires on a version tag, which is not pushed until publishing is enabled.
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write  # trusted publishing
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Build
+        run: uv build
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

@@ -1,0 +1,45 @@
+# quarry.toml — knowledge-ingestion harness configuration.
+# Every convention Quarry uses lives here; nothing is hardcoded. Run `quarry doctor`
+# to validate this file and check optional dependencies.
+
+[store]
+# root is the directory containing this quarry.toml unless set explicitly.
+# root = "/abs/path/to/store"
+wiki = "wiki"                 # compiled articles (relative to root)
+raw  = "raw"                  # immutable source material (relative to root)
+# raw_layout tokens: {year} {month} {date} {slug} {kebab_title} {ext} {topic} {source_id}
+raw_layout = "{year}/{month}/{slug}.{ext}"   # raw path template (relative to raw/)
+manifest_dir = ".quarry"      # compile-manifests (gitignored)
+
+[frontmatter]
+required = ["title", "updated", "sources", "related"]   # fields an article must carry
+sources_field = "sources"     # frontmatter field whose entries cite raw/ material
+related_field = "related"     # frontmatter field listing related wiki articles
+
+[ingest]
+default_ext = "md"
+slug = "{date}_{kebab_title}" # slug template
+on_duplicate = "refuse"       # refuse | warn | allow  (governs the dedup pre-check)
+
+[adapters]
+enabled = ["youtube", "web"]  # allowlist; entry-point adapters are gated by this
+
+[discovery]
+backend = "qmd"               # qmd | none
+mode = "auto"                 # auto (use if available) | on (required) | off
+collection = "wiki"
+dedup_threshold = 85          # % match at ingest that triggers on_duplicate
+densify_topk = 6              # mutual top-K for the densify sweep
+
+[lint]
+broken_links = true
+require_sources_on_disk = true
+orphan_check = true           # inbound-from-body only (frontmatter related: does NOT count)
+index_file = "index.md"       # "" disables the not-in-index check
+fail_on = ["broken_links", "missing_sources"]   # which checks make finish/lint exit non-zero
+
+[finish]
+# what `quarry finish` does after provenance + lint pass
+run_lint = true               # run the lint report as part of finish
+auto_push = false             # push after commit (otherwise push only with --push)
+commit_template = "wiki: {slug}"

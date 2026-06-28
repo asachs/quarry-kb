@@ -28,6 +28,17 @@ def test_help_exits_zero(capsys: pytest.CaptureFixture):
     assert "knowledge-ingestion harness" in capsys.readouterr().out
 
 
+@pytest.mark.parametrize(
+    "cmd",
+    ["init", "adapters", "ingest", "finish", "lint", "doctor", "related", "densify"],
+)
+def test_every_command_has_help(cmd: str):
+    """ISC-81: every subcommand responds to --help with exit 0."""
+    with pytest.raises(SystemExit) as exc:
+        main([cmd, "--help"])
+    assert exc.value.code == 0
+
+
 def test_version(capsys: pytest.CaptureFixture):
     with pytest.raises(SystemExit) as exc:
         main(["--version"])

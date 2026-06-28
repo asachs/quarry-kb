@@ -10,7 +10,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from quarry import __version__, config, discovery, finish, ingest, lint
+from quarry import __version__, config, discovery, finish, git, ingest, lint
 from quarry.adapters import registry
 from quarry.errors import ConfigError, QuarryError
 
@@ -63,6 +63,56 @@ def cmd_lint(args: argparse.Namespace) -> int:
     result = lint.run(cfg)
     print(result.report)
     return 1 if result.fails(cfg.lint.fail_on) else 0
+
+
+def _module_present(name: str) -> bool:
+    import importlib.util
+
+    return importlib.util.find_spec(name) is not None
+
+
+def cmd_doctor(args: argparse.Namespace) -> int:
+    """Report config validity + optional deps/tools. Exit non-zero on a hard problem."""
+    ok = True
+
+    def check(label: str, cond: bool, hint: str = "", hard: bool = True) -> None:
+        nonlocal ok
+        if hard and not cond:
+            ok = False
+        flag = "ok" if cond else ("XX" if hard else "--")
+        print(f"  [{flag}] {label}" + ("" if cond or not hint else f"  -> {hint}"))
+
+    try:
+        cfg = config.load()
+        check("quarry.toml found + valid", True)
+    except (ConfigError, QuarryError) as e:
+        check("quarry.toml", False, str(e))
+        return 2
+
+    check("inside a git repo", git.is_repo(cfg.root), "git init to enable commits", hard=False)
+    enabled = set(cfg.adapters.enabled)
+    if "youtube" in enabled:
+        check(
+            "youtube adapter dep (youtube-transcript-api)",
+            _module_present("youtube_transcript_api"),
+            "pip install 'quarry[youtube]'",
+            hard=False,
+        )
+    if "web" in enabled:
+        check(
+            "web adapter dep (trafilatura)",
+            _module_present("trafilatura"),
+            "pip install 'quarry[web]'",
+            hard=False,
+        )
+    _, status = discovery.check(cfg)
+    check(
+        f"discovery backend ({cfg.discovery.backend})",
+        status != discovery.MISSING,
+        "qmd not found: npm i -g @tobilu/qmd && qmd embed",
+        hard=False,
+    )
+    return 0 if ok else 1
 
 
 def _discovery_backend_or_exit(cfg) -> object | None:
@@ -135,6 +185,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     pl = sub.add_parser("lint", help="run the structural-health report")
     pl.set_defaults(func=cmd_lint)
+
+    pdr = sub.add_parser("doctor", help="check config validity + optional deps/tools")
+    pdr.set_defaults(func=cmd_doctor)
 
     pr = sub.add_parser("related", help="semantic link candidates for an article")
     pr.add_argument("article", help="wiki article path or name fragment")

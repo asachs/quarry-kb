@@ -85,7 +85,9 @@ def test_check_ok_when_qmd_present(cfg, monkeypatch):
 def test_dedup_hits_filters_threshold(cfg, monkeypatch):
     monkeypatch.setattr(discovery, "find_qmd", lambda: "/fake/qmd")
     monkeypatch.setattr(
-        discovery, "parse_qmd_hits", lambda out: [(90, "wiki/a.md"), (50, "wiki/b.md")]
+        discovery,
+        "parse_qmd_hits",
+        lambda out, collection="wiki": [(90, "wiki/a.md"), (50, "wiki/b.md")],
     )
     monkeypatch.setattr(discovery, "_run_qmd", lambda *a, **k: "")
     hits = discovery.dedup_hits(cfg, "Some Title")  # threshold default 85

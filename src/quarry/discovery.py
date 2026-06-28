@@ -49,14 +49,19 @@ def _run_qmd(qmd: str, subcmd: str, text: str, cwd: Path | None) -> str:
     ).stdout
 
 
-def parse_qmd_hits(out: str) -> list[tuple[int, str]]:
-    """Parse `qmd query`/`vsearch` stdout into [(score, 'wiki/<path>.md')], best-first."""
+def parse_qmd_hits(out: str, collection: str = "wiki") -> list[tuple[int, str]]:
+    """Parse qmd stdout into [(score, '<collection>/<path>.md')], best-first.
+
+    The collection (qmd's index name, also the wiki dir) comes from
+    ``[discovery] collection`` so the path scheme is not hardcoded.
+    """
     hits: list[tuple[int, str]] = []
     cur: str | None = None
+    prefix = f"qmd://{re.escape(collection)}/"
     for line in out.splitlines():
-        m = re.match(r"qmd://wiki/(\S+\.md)", line)
+        m = re.match(prefix + r"(\S+\.md)", line)
         if m:
-            cur = "wiki/" + m.group(1)
+            cur = f"{collection}/" + m.group(1)
             continue
         s = re.search(r"Score:\s+(\d+)%", line)
         if s and cur:
@@ -76,8 +81,9 @@ class NoneBackend:
 
 
 class QmdBackend:
-    def __init__(self, qmd_path: str | None):
+    def __init__(self, qmd_path: str | None, collection: str = "wiki"):
         self._qmd = qmd_path
+        self._collection = collection
 
     def available(self) -> bool:
         return self._qmd is not None
@@ -85,13 +91,13 @@ class QmdBackend:
     def query(self, text: str, cwd: Path | None = None) -> list[tuple[int, str]]:
         if not self._qmd:
             return []
-        return parse_qmd_hits(_run_qmd(self._qmd, "query", text, cwd))
+        return parse_qmd_hits(_run_qmd(self._qmd, "query", text, cwd), self._collection)
 
 
 def get_backend(cfg: Config):
     if cfg.discovery.backend == "none" or cfg.discovery.mode == "off":
         return NoneBackend()
-    return QmdBackend(find_qmd())
+    return QmdBackend(find_qmd(), cfg.discovery.collection)
 
 
 def check(cfg: Config) -> tuple[object, str]:

@@ -120,6 +120,7 @@ def run(cfg: Config) -> LintResult:
     incoming: dict[str, set[str]] = defaultdict(set)
     broken: list[tuple[str, str]] = []
     need_links = cfg.lint.broken_links or cfg.lint.orphan_check
+    raw_prefixes = (f"{cfg.store.raw}/", f"../{cfg.store.raw}/")  # links into raw/ aren't broken
     for a in articles:
         content = (wiki / a).read_text(encoding="utf-8")
         links = _body_links(content, a) if need_links else set()
@@ -127,7 +128,7 @@ def run(cfg: Config) -> LintResult:
         for t in links:
             if t in aset:
                 incoming[t].add(a)
-            elif cfg.lint.broken_links and not t.startswith(("raw/", "../raw/")):
+            elif cfg.lint.broken_links and not t.startswith(raw_prefixes):
                 broken.append((a, t))
 
     missing: list[tuple[str, str]] = []
