@@ -1,0 +1,413 @@
+---
+task: "Build Quarry — config-driven knowledge-ingestion harness from bin/kb"
+slug: 20260628-141500_quarry-v1
+project: Quarry
+effort: deep
+effort_source: explicit
+phase: observe
+progress: 0/100
+mode: interactive
+started: 2026-06-28T14:15:00Z
+updated: 2026-06-28T14:15:00Z
+---
+
+## Problem
+
+A working knowledge-ingestion harness already exists as a single 728-line file (`bin/kb`) inside the private `asachs/knowledge` repo. It does its job well — two-call ingest/finish seam, provenance verification, in-process lint, qmd discovery — but it is welded to one wiki's conventions. Every path (`wiki`, `raw`, `.kb`), every layout (`raw/YYYY/MM/...`), every frontmatter field (`title, updated, sources, related`), every threshold (dedup 85%, densify top-6), and the commit message are hardcoded. It ships with **zero automated tests**, so each mechanical break is discovered by a human in production. It cannot be installed, reused by anyone else, or extended without forking. The deterministic machinery that makes LLM-assisted knowledge work reliable is trapped in one private file.
+
+## Vision
+
+`pip install quarry[youtube,web]`, drop a `quarry.toml`, and any markdown knowledge wiki gets the same disciplined ingest pipeline: resolve an adapter, fetch a source, write immutable raw material, hand the agent a machine-readable compile-spec, then verify provenance, lint, and commit. Every convention is configuration; nothing is baked in. The core runs and tests **without a single API key**, because Quarry never calls a model — it owns only the deterministic half. Euphoric surprise: `bin/kb` becomes a *consumer* of Quarry via its own `quarry.toml`, a stranger ships a `pdf` adapter as a third-party plugin without touching Quarry's source, and the whole thing is green at ≥90% coverage across Python 3.11–3.13.
+
+## Out of Scope
+
+- **No LLM calls, ever.** Quarry owns the deterministic half only; writing the article is the agent's/human's job between `ingest` and `finish`. Runnable and testable without API keys is a hard line.
+- **No opinion about *your* wiki's shape.** Quarry ships generic defaults and examples — never André's content, paths, or conventions. The private knowledge repo's data stays private.
+- **No knowledge-repo migration in this effort.** Quarry is built standalone first; cutting `asachs/knowledge` over to consume it (its own `quarry.toml`, golden-lint match, `bin/kb` retirement) is a separate, later effort.
+- **No PyPI publish or GitHub remote in this effort.** The CI workflow file is written and the release job is defined, but actual publishing (trusted-publishing setup, account/token steps) is deferred to André's review — local-first.
+- **No roadmap adapters in v1.** `pdf`, `github`, `instagram` are explicitly later; v1 ships `youtube` + `web` only.
+- **No discovery backends beyond qmd in v1.** The discovery interface is pluggable, but only the `qmd` backend is implemented now.
+- **No `quarry serve`/watch mode, no auto-index on finish, no ingest-date-vs-upload-date split.** All deferred to later.
+- **No note-taking-app features.** Quarry is a CLI harness, not an editor or UI.
+
+## Principles
+
+- **Code before prompts.** Every deterministic mechanic is tested code; the irreducibly-generative article step is the only thing left to the LLM/human, and Quarry never performs it.
+- **The manifest is the product.** The compile-spec is a persisted, machine-readable file; `finish` *verifies* the article against it, never trusts it.
+- **Generic core.** No baked-in conventions. A `Config` dataclass is threaded everywhere; no module reads conventions directly. Absent config fails helpfully, never silently defaults to the author's wiki.
+- **Fail loud, fail tested.** Every mechanical step has a test that catches its break before a user does. User-facing errors are clean one-liners, never tracebacks.
+- **Optional deps degrade gracefully.** A missing extra or external tool produces a clean message or a skipped feature — never a crash in a core flow.
+- **Adapters are the extension unit.** A new source is one small, self-contained, hermetically-tested adapter discoverable via entry points — no fork required.
+- **Portable by construction.** No hardcoded paths; store root discovered at runtime from config.
+
+## Constraints
+
+- **Min Python 3.11.** Native `tomllib` — no `tomli` backport anywhere. Modern `X | Y` typing permitted.
+- **Build backend: hatchling.** `src/`-layout, `console_scripts: quarry = quarry.cli:main`.
+- **License: MIT.**
+- **Core runtime dependency is exactly one: `PyYAML`.** (Deliberate deviation from the source spec's "stdlib-only core" — frontmatter parsing on arbitrary user wikis is made robust with a real YAML parser rather than a regex reader. `tomllib` is stdlib at 3.11, so no toml dep.) All other deps are extras: `[youtube]=youtube-transcript-api`, `[web]=trafilatura`, `[discovery]` (docs-only; qmd is an external Node tool, not a pip dep), `[all]`, `[dev]=pytest,ruff,coverage`.
+- **Two-call seam is immovable.** `ingest` (fetch → raw → manifest) and `finish` (verify → lint → commit) are separate processes; Quarry NEVER shells out to an LLM between them.
+- **No push without explicit opt-in.** `finish` commits but only pushes on `--push` or `[finish] auto_push=true`.
+- **Coverage gate ≥ 90%; `ruff` clean.** Both enforced in CI and treated as build-failing.
+- **Adapter network calls live behind overridable methods** so the default test suite is fully hermetic (no network, no keys).
+
+## Goal
+
+Generalise `bin/kb` into **Quarry**: an installable, MIT-licensed, config-driven Python ≥3.11 package (`src/quarry/`, hatchling, console script `quarry`) that ships the full ingest/finish/manifest/lint pipeline, `youtube` + `web` adapters with entry-point plugin discovery, an optional pluggable `qmd` discovery backend (related/densify/dedup), and `init`/`doctor` commands — verified by an extensive, hermetic test suite at ≥90% coverage with `ruff` clean and a py3.11–3.13 CI matrix, carrying zero personal data and never calling an LLM.
+
+## Criteria
+
+### Packaging & Build
+
+- [ ] ISC-1: `pip install .` in a clean venv exits 0.
+- [ ] ISC-2: The installed `quarry --help` console script runs and exits 0.
+- [ ] ISC-3: `python -m quarry --help` exits 0 (module entry point).
+- [ ] ISC-4: `pyproject.toml` declares `build-backend = "hatchling.build"`.
+- [ ] ISC-5: `pyproject.toml` declares `requires-python = ">=3.11"`.
+- [ ] ISC-6: The core install pulls exactly one runtime dependency, `PyYAML` (probe: fresh-venv `pip list` minus pip/setuptools = `[quarry, PyYAML]`).
+- [ ] ISC-7: Extras `[youtube]`, `[web]`, `[discovery]`, `[all]`, `[dev]` are declared and each installs without error.
+- [ ] ISC-8: A `LICENSE` file is present and is the MIT license text.
+
+### Config & init
+
+- [ ] ISC-9: `quarry init` in an empty dir writes a `quarry.toml`.
+- [ ] ISC-10: The scaffolded `quarry.toml` is fully commented — every config table carries an explanatory comment.
+- [ ] ISC-11: `quarry init` ensures `.quarry/` is in `.gitignore` (creating `.gitignore` if absent).
+- [ ] ISC-12: `quarry init` refuses to overwrite an existing `quarry.toml` (exit ≠ 0, clean message) unless `--force`.
+- [ ] ISC-13: Config parsing uses native `tomllib`; no `tomli` import exists anywhere (probe: `rg "import tomli\b"` → 0 hits).
+- [ ] ISC-14: Any command run with no `quarry.toml` found exits **2** with `quarry: no quarry.toml found (run 'quarry init')`.
+- [ ] ISC-15: Unknown config keys produce a warning to stderr but do not fail the load.
+- [ ] ISC-16: A config type error (e.g. string where int expected) fails with exit **2** and a field-named message.
+- [ ] ISC-17: Loading a minimal `quarry.toml` (only `[store]`) succeeds with every other field defaulted.
+- [ ] ISC-18: The `Config` dataclass is the sole carrier of conventions — only `config.py` reads `tomllib`/raw config (probe: `rg "tomllib" src/quarry` → only `config.py`).
+- [ ] ISC-19: A `[tool.quarry]` table in `pyproject.toml` is honored as a fallback when no standalone `quarry.toml` exists.
+
+### Store & root discovery
+
+- [ ] ISC-20: Store root is discovered by walking up from CWD to the directory containing `quarry.toml`.
+- [ ] ISC-21: An explicit `[store] root` in config overrides walk-up discovery.
+- [ ] ISC-22: Store path resolution works in a non-git directory (git is not required).
+- [ ] ISC-23: All `raw_layout` tokens — `{year} {month} {date} {slug} {kebab_title} {ext} {topic} {source_id}` — expand correctly.
+- [ ] ISC-24: Changing `raw_layout` in config changes the written raw path accordingly (config-matrix test).
+- [ ] ISC-25: The `slug` template from `[ingest]` drives the generated slug.
+
+### Manifest seam
+
+- [ ] ISC-26: `ingest` writes `{manifest_dir}/{slug}.json`.
+- [ ] ISC-27: The manifest contains all required keys: `slug, source_url, adapter, raw_path, content_sha256, target_wiki_path, required_frontmatter, must_cite_source, metadata`.
+- [ ] ISC-28: `content_sha256` equals the SHA-256 of the fetched content (round-trip assertion).
+- [ ] ISC-29: A manifest write → load round-trips to an equal object.
+- [ ] ISC-30: `finish` aborts (exit ≠ 0, clean message) when no manifest exists for the slug.
+
+### Ingest
+
+- [ ] ISC-31: `ingest <url>` resolves the first matching enabled adapter.
+- [ ] ISC-32: `ingest` writes immutable raw material at the configured raw path.
+- [ ] ISC-33: `ingest` refuses to clobber existing raw without `--force` (exit ≠ 0).
+- [ ] ISC-34: `ingest` prints a human/agent-readable compile-spec to stdout.
+- [ ] ISC-35: `--topic T` populates `target_wiki_path` in the manifest.
+- [ ] ISC-36: With discovery available and a hit ≥ `dedup_threshold`, `on_duplicate=refuse` aborts ingest (exit ≠ 0).
+- [ ] ISC-37: `on_duplicate=warn` prints a warning and proceeds with ingest.
+- [ ] ISC-38: `on_duplicate=allow` ingests with no dedup interruption.
+- [ ] ISC-39: `--force` bypasses the dedup pre-check.
+- [ ] ISC-40: An adapter exception during fetch surfaces as a clean non-zero quarry error (no traceback).
+
+### Finish & provenance
+
+- [ ] ISC-41: `finish` aborts when the target article file does not exist.
+- [ ] ISC-42: `finish` aborts when the article's `sources_field` does not include `must_cite_source` (provenance verified, not trusted).
+- [ ] ISC-43: `finish` runs lint when `[finish] run_lint=true`.
+- [ ] ISC-44: `finish` aborts when a `[lint] fail_on` check fails.
+- [ ] ISC-45: `finish` commits (`git add` + `git commit`) on success.
+- [ ] ISC-46: `finish` does NOT push unless `--push` or `[finish] auto_push=true`.
+- [ ] ISC-47: The commit message matches `[finish] commit_template`.
+- [ ] ISC-48: `finish` in a non-git directory degrades gracefully (skips commit with a clear note, no crash).
+
+### Lint
+
+- [ ] ISC-49: `lint` detects broken internal markdown links.
+- [ ] ISC-50: `lint` detects frontmatter sources not present on disk.
+- [ ] ISC-51: `lint` detects orphan articles using inbound-from-body only (frontmatter `related:` does NOT count — documented behaviour).
+- [ ] ISC-52: `lint` reports link density (total cross-refs, avg outgoing).
+- [ ] ISC-53: `lint` reports the top-connected articles.
+- [ ] ISC-54: `lint` reports per-category health.
+- [ ] ISC-55: `lint` reports not-in-index articles when `index_file` is set.
+- [ ] ISC-56: `index_file = ""` disables the not-in-index check.
+- [ ] ISC-57: `lint` exits non-zero iff a `[lint] fail_on` check fails.
+- [ ] ISC-58: `lint` returns a structured `LintResult` (counts + per-issue lists); `finish` consumes the object directly, no text-scraping.
+- [ ] ISC-59: Each lint check is individually toggleable from `[lint]` config.
+- [ ] ISC-60: Golden-output test — a fixture wiki produces a byte-locked report string.
+
+### Discovery (optional, pluggable)
+
+- [ ] ISC-61: `discovery.available()` returns `False` cleanly when the backend tool is absent.
+- [ ] ISC-62: `backend="none"` disables discovery; `related`/`densify` print a clean message and core flows are unaffected.
+- [ ] ISC-63: `related <article>` prints ranked candidates excluding the article itself.
+- [ ] ISC-64: `related` excludes already-linked articles (frontmatter `related` + body links).
+- [ ] ISC-65: `densify` lists mutual top-K unlinked pairs.
+- [ ] ISC-66: `densify --apply` adds bidirectional `## See also` links.
+- [ ] ISC-67: `densify --topk N` overrides the configured `densify_topk`.
+- [ ] ISC-68: The qmd-output parser turns real `qmd query` stdout into `[(score, path)]` (fixture test).
+- [ ] ISC-69: Missing qmd during `related`/`densify` exits non-zero with a clean install hint, never a traceback.
+
+### Adapters & plugins
+
+- [ ] ISC-70: `adapters` lists registered adapters and marks which are enabled.
+- [ ] ISC-71: The `[adapters] enabled` allowlist gates which adapters actually run.
+- [ ] ISC-72: Third-party adapters are discoverable via the `quarry.adapters` entry-point group.
+- [ ] ISC-73: The youtube adapter parses a video id from `watch?v=`, `youtu.be/`, `/shorts/`, and `/embed/` URLs.
+- [ ] ISC-74: The youtube adapter returns content + metadata from a recorded cassette (no network).
+- [ ] ISC-75: The web adapter extracts main content via trafilatura from a recorded fixture (no network).
+- [ ] ISC-76: The web adapter returns the required metadata (`title, url, date, source_id`).
+- [ ] ISC-77: Exactly one live `@pytest.mark.integration` test exists per network adapter, excluded from the default run.
+- [ ] ISC-78: A missing adapter extra (e.g. `youtube-transcript-api`) yields a clean install hint, not an `ImportError` traceback.
+
+### CLI & errors
+
+- [ ] ISC-79: `quarry <unknown-command>` exits non-zero with usage text.
+- [ ] ISC-80: Exit codes are honored across paths: 0 success, 1 operational error, 2 config error.
+- [ ] ISC-81: Every command responds to `--help`.
+- [ ] ISC-82: `doctor` reports config validity plus optional deps/tools (git, qmd, adapter deps).
+- [ ] ISC-83: Every user-facing error class prints a one-line message, never a traceback (probe: induce each).
+
+### Testing & quality gates
+
+- [ ] ISC-84: `pytest` exits 0 with `[dev,all]` installed.
+- [ ] ISC-85: Coverage ≥ 90% (probe: `coverage report` total).
+- [ ] ISC-86: `ruff check` reports no errors.
+- [ ] ISC-87: A parametrised config-matrix test runs the pipeline under ≥ 3 distinct `quarry.toml` variants (different `raw_layout`, frontmatter schema, discovery off).
+- [ ] ISC-88: The default test run is fully hermetic — passes with network blocked (probe: run under no-network sandbox).
+
+### CI/CD
+
+- [ ] ISC-89: `.github/workflows/ci.yml` exists with a py3.11/3.12/3.13 matrix.
+- [ ] ISC-90: CI runs `ruff check` and `pytest --cov`, failing the build under 90% coverage.
+- [ ] ISC-91: Integration (network) tests are gated to a manual/nightly workflow, not the default CI run.
+- [ ] ISC-92: A tagged-release PyPI trusted-publishing job is defined in CI but not wired to fire (publish deferred).
+
+### Docs & public hygiene
+
+- [ ] ISC-93: `README.md` covers what/why, a 60-second quickstart, a config reference, and an adapter-authoring guide.
+- [ ] ISC-94: `examples/quarry.toml` exists and matches the `quarry init` default output.
+- [ ] ISC-95: `CHANGELOG.md` (Keep-a-Changelog) and `CONTRIBUTING.md` (adapter contract + test requirement) are present.
+
+### Anti-criteria
+
+- [ ] ISC-96: Anti — Quarry NEVER imports or calls an LLM SDK (probe: `rg -i "anthropic|openai|llm_call" src/quarry` → 0 hits; full suite runs with no API keys set).
+- [ ] ISC-97: Anti — zero personal data: the repo contains no reference to André's wiki content, private absolute paths, or `asachs/knowledge` (probe: `rg -i "asachs|/Users/asachs|knowledge repo content"` → 0 hits in shipped files).
+- [ ] ISC-98: Anti — no hardcoded conventions: core modules contain no bare `"wiki"`/`"raw"`/`85`/`6` convention literals outside `config.py` defaults and tests (probe: targeted `rg` of `src/quarry` excluding `config.py`).
+- [ ] ISC-99: Anti — optional-dep absence never crashes a core flow: `ingest`/`finish`/`lint` on a local non-network source succeed with only the core install (no extras).
+- [ ] ISC-100: Anti — the full default test suite passes with no API keys and no network present (testable-without-keys is provable, not just claimed).
+
+## Test Strategy
+
+```yaml
+# Representative per-ISC entries; remaining ISCs follow the same per-module pattern
+# (unit test in tests/test_<module>.py with the named tool/probe).
+
+- isc: ISC-1
+  type: packaging
+  check: clean-venv install
+  threshold: exit 0
+  tool: python -m venv .v && .v/bin/pip install .
+
+- isc: ISC-6
+  type: dependency-audit
+  check: core runtime deps
+  threshold: exactly {PyYAML}
+  tool: pip list --format=freeze in core-only venv
+
+- isc: ISC-13
+  type: source-grep
+  check: no tomli backport
+  threshold: 0 hits
+  tool: rg "import tomli\b" src/
+
+- isc: ISC-14
+  type: cli-exit
+  check: missing config message + code
+  threshold: exit 2 + exact string
+  tool: pytest CliRunner in a config-less tmp dir
+
+- isc: ISC-24
+  type: config-matrix
+  check: raw path follows configured raw_layout
+  threshold: path equals templated expectation
+  tool: parametrised pytest over quarry.toml variants
+
+- isc: ISC-28
+  type: provenance
+  check: manifest content_sha256 == sha256(content)
+  threshold: equal
+  tool: pytest manifest round-trip
+
+- isc: ISC-42
+  type: provenance
+  check: finish aborts on missing source citation
+  threshold: exit 1 + provenance message
+  tool: pytest finish with non-citing article fixture
+
+- isc: ISC-46
+  type: seam-guard
+  check: commit without push
+  threshold: git log has commit, no push invoked
+  tool: pytest with a tmp git repo + push spy
+
+- isc: ISC-60
+  type: golden
+  check: lint report byte-match
+  threshold: exact string equality
+  tool: pytest against fixture wiki + recorded golden
+
+- isc: ISC-74
+  type: hermetic-adapter
+  check: youtube fetch from cassette
+  threshold: content+metadata match recorded fixture
+  tool: pytest with monkeypatched _fetch_transcript/_fetch_oembed
+
+- isc: ISC-75
+  type: hermetic-adapter
+  check: web extraction from fixture HTML
+  threshold: extracted content matches expected
+  tool: pytest with local HTML fixture (no network)
+
+- isc: ISC-85
+  type: coverage-gate
+  check: total coverage
+  threshold: >= 90%
+  tool: coverage run -m pytest && coverage report --fail-under=90
+
+- isc: ISC-86
+  type: lint-gate
+  check: ruff
+  threshold: 0 errors
+  tool: ruff check .
+
+- isc: ISC-88
+  type: hermetic-suite
+  check: default run with no network
+  threshold: all pass
+  tool: pytest under network-blocked sandbox
+
+- isc: ISC-96
+  type: anti-probe
+  check: no LLM SDK usage
+  threshold: 0 hits + suite green with no keys
+  tool: rg -i "anthropic|openai" src/quarry; pytest with env unset
+
+- isc: ISC-100
+  type: anti-probe
+  check: no-keys/no-network full run
+  threshold: exit 0
+  tool: env -i pytest in network-blocked sandbox
+```
+
+## Features
+
+```yaml
+- name: ConfigAndInit
+  description: quarry.toml schema, load/validate/defaults, Config dataclass, `init` scaffold
+  satisfies: [ISC-9, ISC-10, ISC-11, ISC-12, ISC-13, ISC-14, ISC-15, ISC-16, ISC-17, ISC-18, ISC-19]
+  depends_on: []
+  parallelizable: false  # foundation everything threads through
+
+- name: StoreAndPaths
+  description: root discovery, path-token templating, raw_layout/slug resolution
+  satisfies: [ISC-20, ISC-21, ISC-22, ISC-23, ISC-24, ISC-25]
+  depends_on: [ConfigAndInit]
+  parallelizable: false
+
+- name: ManifestSeam
+  description: compile-manifest read/write/hash, round-trip
+  satisfies: [ISC-26, ISC-27, ISC-28, ISC-29, ISC-30]
+  depends_on: [StoreAndPaths]
+  parallelizable: true
+
+- name: Adapters
+  description: Adapter contract, registry, entry-point discovery, enabled allowlist, youtube + web with cassettes
+  satisfies: [ISC-31, ISC-40, ISC-70, ISC-71, ISC-72, ISC-73, ISC-74, ISC-75, ISC-76, ISC-77, ISC-78]
+  depends_on: [ConfigAndInit]
+  parallelizable: true
+
+- name: Ingest
+  description: resolve adapter -> fetch -> raw write -> manifest -> dedup pre-check + on_duplicate
+  satisfies: [ISC-32, ISC-33, ISC-34, ISC-35, ISC-36, ISC-37, ISC-38, ISC-39]
+  depends_on: [ManifestSeam, Adapters, Discovery]
+  parallelizable: false
+
+- name: Lint
+  description: config-driven structural-health checks, LintResult object, fail_on, golden test
+  satisfies: [ISC-49, ISC-50, ISC-51, ISC-52, ISC-53, ISC-54, ISC-55, ISC-56, ISC-57, ISC-58, ISC-59, ISC-60]
+  depends_on: [ConfigAndInit, StoreAndPaths]
+  parallelizable: true
+
+- name: Finish
+  description: provenance verify -> lint -> commit (no push unless opted in), non-git fallback
+  satisfies: [ISC-41, ISC-42, ISC-43, ISC-44, ISC-45, ISC-46, ISC-47, ISC-48]
+  depends_on: [ManifestSeam, Lint, GitHelpers]
+  parallelizable: false
+
+- name: Discovery
+  description: qmd backend behind available()/query() interface; related, densify, dedup; graceful degrade
+  satisfies: [ISC-61, ISC-62, ISC-63, ISC-64, ISC-65, ISC-66, ISC-67, ISC-68, ISC-69]
+  depends_on: [ConfigAndInit, StoreAndPaths]
+  parallelizable: true
+
+- name: GitHelpers
+  description: thin rev-parse/add/commit/push wrappers with non-git fallback
+  satisfies: [ISC-22, ISC-45, ISC-48]
+  depends_on: []
+  parallelizable: true
+
+- name: CliAndDoctor
+  description: argparse dispatch to Config-taking command funcs, exit codes, doctor, error one-liners
+  satisfies: [ISC-1, ISC-2, ISC-3, ISC-79, ISC-80, ISC-81, ISC-82, ISC-83]
+  depends_on: [ConfigAndInit, Ingest, Finish, Lint, Discovery]
+  parallelizable: false
+
+- name: Packaging
+  description: pyproject (hatchling, requires-python, extras), LICENSE, console script
+  satisfies: [ISC-4, ISC-5, ISC-6, ISC-7, ISC-8]
+  depends_on: []
+  parallelizable: true
+
+- name: TestSuiteAndGates
+  description: full hermetic suite, config matrix, coverage >=90%, ruff clean
+  satisfies: [ISC-84, ISC-85, ISC-86, ISC-87, ISC-88]
+  depends_on: [CliAndDoctor]
+  parallelizable: false
+
+- name: CI
+  description: ci.yml matrix py3.11-3.13, ruff+pytest+cov gate, gated integration, deferred release job
+  satisfies: [ISC-89, ISC-90, ISC-91, ISC-92]
+  depends_on: [TestSuiteAndGates]
+  parallelizable: true
+
+- name: DocsAndHygiene
+  description: README, examples/quarry.toml, CHANGELOG, CONTRIBUTING, anti-data/anti-LLM guards
+  satisfies: [ISC-93, ISC-94, ISC-95, ISC-96, ISC-97, ISC-98, ISC-99, ISC-100]
+  depends_on: [CliAndDoctor]
+  parallelizable: true
+```
+
+## Decisions
+
+- 2026-06-28 14:15: License **MIT**, build backend **hatchling**, min Python **3.11** (native `tomllib`, no `tomli` dep), v1 ships **both** `youtube` + `web` adapters. Settled in bootstrap interview; recorded as Constraints.
+- 2026-06-28 14:15: **PyYAML added to the core runtime dependency**, overriding the source spec's "stdlib-only core" principle (SPEC.md §2/§11). Rationale: the source's regex frontmatter reader is fragile against arbitrary user wikis, and frontmatter is on the critical provenance path. Net core deps = `PyYAML` only (tomllib is stdlib at 3.11). SPEC.md §2/§11 to be reconciled so the principle matches reality. This is the one deliberate divergence from the spec.
+- 2026-06-28 14:15: **Build ISA/plan-first, then incrementally** (config+store → manifest+seam → adapters → lint → discovery → finish → CLI → tests → CI), with review checkpoints. Chosen over one-pass for early drift-catch.
+- 2026-06-28 14:15: **Quarry built standalone first**; knowledge-repo migration (§15) deferred to a separate effort. Keeps public hygiene clean and decouples the two repos' histories.
+- 2026-06-28 14:15: **Local-first** — CI workflow written and a release job defined, but GitHub remote + PyPI trusted-publishing deferred to André's review (avoids spending effort on account/token setup prematurely).
+- 2026-06-28 14:15: **ISC count is 100, under the E4 soft floor of 128** — show-your-math: the package's genuine verification surface is ~100 atomic probes across 11 modules + packaging + CI + docs. Decomposing to 128 would manufacture probes that don't map to real failure modes (the canonical showpiece makes the same call at 38 vs the E5 floor). If splitting later reveals real sub-probes (e.g. per-token `raw_layout` checks), IDs will extend as ISC-23.1/23.2 without renumbering.
+- 2026-06-28 14:15: Root discovery changes signal from `bin/kb`'s "dir containing `wiki/`+`raw/`" to "dir containing `quarry.toml`" — the config file becomes the marker, consistent with generic-core.
+
+## Changelog
+
+_No conjecture/refuted-by/learned/criterion-now entries yet — this section accrues at the LEARN phase as the build refutes assumptions. The PyYAML deviation (Decisions, 2026-06-28) is the first standing conjecture: that a real YAML parser is worth breaking the zero-dep-core principle; it will be confirmed or refuted once frontmatter edge cases are tested._
+
+## Verification
+
+_Empty until the VERIFY phase. Each checked ISC will be backed here by quoted command output, file content, or a test-run excerpt._
+
+<!--
+Quarry project ISA, E4, all twelve sections. Generalises the private bin/kb (728 lines) into a public, config-driven, tested package. 100 ISCs across packaging, config/init, store, manifest seam, ingest, finish/provenance, lint, discovery, adapters/plugins, CLI, testing gates, CI, docs/hygiene. Anti-criteria (ISC-96..100) cover the load-bearing invariants: no LLM, no personal data, no hardcoded conventions, graceful optional-dep degrade, no-keys/no-network testability. No antecedents — the goal is verifiable (build/test/install/lint), not experiential. ISC count under the E4 floor is justified in Decisions. Changelog + Verification intentionally empty at OBSERVE per the empty-section rule.
+-->

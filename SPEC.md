@@ -32,6 +32,8 @@ a note-taking app, or opinionated about *your* wiki's shape. Every convention is
 - **Fail loud, fail tested.** Every mechanical step has a test that catches its break before a user does. Optional deps degrade gracefully, never crash.
 - **Adapters are the extension unit.** New source = one small tested adapter, discoverable via entry points — no fork.
 
+> **Dependency note (deliberate deviation):** an earlier draft mandated a *stdlib-only core*. v1 instead takes a single core runtime dependency, **`PyYAML`**, to parse frontmatter robustly on arbitrary user wikis (frontmatter sits on the provenance-verification critical path; a regex reader is too fragile to be load-bearing). With **min Python 3.11**, `tomllib` is stdlib, so `PyYAML` is the *only* core dep. This trades the zero-dep ideal for correctness on the one path that must not silently misread. Everything else stays extras-gated. See §11.
+
 ## 3. Package layout
 
 ```
@@ -171,19 +173,21 @@ missing tool → these degrade gracefully (clean message / skip), never crash co
 - **Lint golden**: fixture wiki → expected report (byte-locked).
 - **CLI integration**: invoke through the entry point (CliRunner/subprocess) for each command incl. error/exit-code paths and `--help`.
 - **Edge/graceful**: empty store, malformed frontmatter, missing optional deps, non-git dir.
-- **Gates**: coverage ≥ 90%; `ruff` clean; (optional) `mypy`. CI matrix py3.9–3.13.
+- **Gates**: coverage ≥ 90%; `ruff` clean; (optional) `mypy`. CI matrix py3.11–3.13.
 
 ## 11. Packaging
 
-`pyproject.toml` (PEP 621, `hatchling` or `setuptools`): `console_scripts: quarry =
-quarry.cli:main`; core deps **stdlib-only** (+ `tomli` for <3.11); extras
+`pyproject.toml` (PEP 621, **`hatchling`**): `console_scripts: quarry =
+quarry.cli:main`; **min Python 3.11** (native `tomllib` — no `tomli` backport). Core
+runtime dependency is **`PyYAML` only** — a real YAML parser for robust frontmatter on
+arbitrary user wikis (see §2, deliberate deviation from a zero-dep core). Extras
 `[youtube]=youtube-transcript-api`, `[web]=trafilatura`, `[discovery]` (docs: qmd is an
 external Node tool, not a pip dep — `doctor` checks it), `[all]`, `[dev]=pytest,ruff,coverage`.
 SemVer; `CHANGELOG.md` (Keep-a-Changelog). Publish to PyPI on tagged release via CI.
 
 ## 12. CI/CD (`.github/workflows/ci.yml`)
 
-On push/PR: matrix py3.9–3.13 → install `[dev,all]` → `ruff check` → `pytest --cov` (fail
+On push/PR: matrix py3.11–3.13 → install `[dev,all]` → `ruff check` → `pytest --cov` (fail
 < 90%) → upload coverage. Separate tagged-release job → build + `twine upload` to PyPI
 (trusted publishing). Integration tests run only on a manual/nightly workflow (network).
 
@@ -223,9 +227,15 @@ Every hardcoded convention (`"wiki"`, `"raw"`, `raw/YYYY/MM`, `["title","updated
 - **v1**: core pipeline (ingest/finish/manifest/lint), `youtube` + `web` adapters, qmd discovery (related/densify/dedup), config + `init`, full test suite + CI, PyPI publish, docs.
 - **Later**: `pdf`/`github`/`instagram` adapters; pluggable discovery backends beyond qmd; `finish` auto-index; ingest-date vs source-upload-date; richer config validation; a `quarry serve`/watch mode.
 
-## Open decisions for bootstrap
+## Bootstrap decisions (resolved 2026-06-28)
 
-- License: MIT vs Apache-2.0.
-- Build backend: hatchling (recommended) vs setuptools.
-- Whether `web` adapter ships in v1 or only `youtube` (web extraction has heavier deps).
-- Min Python: 3.9 (broad) vs 3.10/3.11 (cleaner typing, native tomllib at 3.11).
+Settled in the bootstrap interview; recorded as Constraints in `ISA.md`.
+
+- **License:** MIT.
+- **Build backend:** hatchling.
+- **v1 adapters:** both `youtube` + `web` (web's heavier `trafilatura` dep is extras-gated `[web]`).
+- **Min Python:** 3.11 (native `tomllib`, cleaner typing; no `tomli` backport).
+- **Core dependency:** `PyYAML` only (see §2 dependency note / §11).
+- **Sequencing:** ISA/plan-first, then incremental build with review checkpoints.
+- **Migration:** Quarry built standalone first; knowledge-repo cutover (§15) is a later effort.
+- **Publish:** local-first — CI workflow written, GitHub remote + PyPI publish deferred.
