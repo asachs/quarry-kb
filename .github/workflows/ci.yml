@@ -3,7 +3,11 @@ name: CI
 on:
   push:
     branches: [master, main]
+    tags: ["v*", "test-v*"]  # release / testpypi jobs gate on the tag ref
   pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * 1"  # weekly — exercises the gated integration job
 
 jobs:
   test:
