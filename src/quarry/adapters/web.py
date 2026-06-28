@@ -33,7 +33,7 @@ class WebAdapter(Adapter):
             import trafilatura
         except ImportError as e:
             raise QuarryError(
-                "web adapter needs the [web] extra (pip install 'quarry[web]')"
+                "web adapter needs the [web] extra (pip install 'quarry-kb[web]')"
             ) from e
 
         content = trafilatura.extract(html, url=url, include_comments=False) or ""

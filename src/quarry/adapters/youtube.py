@@ -47,7 +47,7 @@ class YouTubeAdapter(Adapter):
         except ImportError as e:
             raise QuarryError(
                 "youtube adapter needs the [youtube] extra "
-                "(pip install 'quarry[youtube]')"
+                "(pip install 'quarry-kb[youtube]')"
             ) from e
         fetched = YouTubeTranscriptApi().fetch(vid)
         snippets = getattr(fetched, "snippets", fetched)

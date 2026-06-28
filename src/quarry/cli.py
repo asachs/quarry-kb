@@ -95,14 +95,14 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         check(
             "youtube adapter dep (youtube-transcript-api)",
             _module_present("youtube_transcript_api"),
-            "pip install 'quarry[youtube]'",
+            "pip install 'quarry-kb[youtube]'",
             hard=False,
         )
     if "web" in enabled:
         check(
             "web adapter dep (trafilatura)",
             _module_present("trafilatura"),
-            "pip install 'quarry[web]'",
+            "pip install 'quarry-kb[web]'",
             hard=False,
         )
     _, status = discovery.check(cfg)
