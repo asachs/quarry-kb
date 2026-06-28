@@ -1,0 +1,33 @@
+============================================================
+WIKI STRUCTURAL HEALTH REPORT
+============================================================
+
+Total articles:        3
+Total cross-references: 3
+Avg outgoing links:    1.0
+Orphaned articles:     1
+Zero outgoing links:   1
+Broken links:          1
+Missing source files:  1
+
+--- BROKEN LINKS ---
+  ai/alpha.md -> ai/ghost.md
+
+--- MISSING SOURCE FILES ---
+  ai/beta.md -> raw/missing.md
+
+--- TOP CONNECTED ---
+    3  ai/alpha.md
+    2  ai/beta.md
+    0  misc/gamma.md
+
+--- ORPHANED ARTICLES (no inbound from body) ---
+  misc/gamma.md
+
+--- CATEGORY HEALTH ---
+  ai                     2 articles    100% linked
+  misc                   1 articles      0% linked
+
+--- NOT IN INDEX ---
+  ai/beta.md
+  misc/gamma.md

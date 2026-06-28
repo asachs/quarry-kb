@@ -5,10 +5,10 @@ project: Quarry
 effort: deep
 effort_source: explicit
 phase: execute
-progress: 57/100
+progress: 77/100
 mode: interactive
 started: 2026-06-28T14:15:00Z
-updated: 2026-06-28T17:05:00Z
+updated: 2026-06-28T17:55:00Z
 ---
 
 ## Problem
@@ -114,29 +114,29 @@ Generalise `bin/kb` into **Quarry**: an installable, MIT-licensed, config-driven
 
 ### Finish & provenance
 
-- [ ] ISC-41: `finish` aborts when the target article file does not exist.
-- [ ] ISC-42: `finish` aborts when the article's `sources_field` does not include `must_cite_source` (provenance verified, not trusted).
-- [ ] ISC-43: `finish` runs lint when `[finish] run_lint=true`.
-- [ ] ISC-44: `finish` aborts when a `[lint] fail_on` check fails.
-- [ ] ISC-45: `finish` commits (`git add` + `git commit`) on success.
-- [ ] ISC-46: `finish` does NOT push unless `--push` or `[finish] auto_push=true`.
-- [ ] ISC-47: The commit message matches `[finish] commit_template`.
-- [ ] ISC-48: `finish` in a non-git directory degrades gracefully (skips commit with a clear note, no crash).
+- [x] ISC-41: `finish` aborts when the target article file does not exist.
+- [x] ISC-42: `finish` aborts when the article's `sources_field` does not include `must_cite_source` (provenance verified, not trusted).
+- [x] ISC-43: `finish` runs lint when `[finish] run_lint=true`.
+- [x] ISC-44: `finish` aborts when a `[lint] fail_on` check fails.
+- [x] ISC-45: `finish` commits (`git add` + `git commit`) on success.
+- [x] ISC-46: `finish` does NOT push unless `--push` or `[finish] auto_push=true`.
+- [x] ISC-47: The commit message matches `[finish] commit_template`.
+- [x] ISC-48: `finish` in a non-git directory degrades gracefully (skips commit with a clear note, no crash).
 
 ### Lint
 
-- [ ] ISC-49: `lint` detects broken internal markdown links.
-- [ ] ISC-50: `lint` detects frontmatter sources not present on disk.
-- [ ] ISC-51: `lint` detects orphan articles using inbound-from-body only (frontmatter `related:` does NOT count — documented behaviour).
-- [ ] ISC-52: `lint` reports link density (total cross-refs, avg outgoing).
-- [ ] ISC-53: `lint` reports the top-connected articles.
-- [ ] ISC-54: `lint` reports per-category health.
-- [ ] ISC-55: `lint` reports not-in-index articles when `index_file` is set.
-- [ ] ISC-56: `index_file = ""` disables the not-in-index check.
-- [ ] ISC-57: `lint` exits non-zero iff a `[lint] fail_on` check fails.
-- [ ] ISC-58: `lint` returns a structured `LintResult` (counts + per-issue lists); `finish` consumes the object directly, no text-scraping.
-- [ ] ISC-59: Each lint check is individually toggleable from `[lint]` config.
-- [ ] ISC-60: Golden-output test — a fixture wiki produces a byte-locked report string.
+- [x] ISC-49: `lint` detects broken internal markdown links.
+- [x] ISC-50: `lint` detects frontmatter sources not present on disk.
+- [x] ISC-51: `lint` detects orphan articles using inbound-from-body only (frontmatter `related:` does NOT count — documented behaviour).
+- [x] ISC-52: `lint` reports link density (total cross-refs, avg outgoing).
+- [x] ISC-53: `lint` reports the top-connected articles.
+- [x] ISC-54: `lint` reports per-category health.
+- [x] ISC-55: `lint` reports not-in-index articles when `index_file` is set.
+- [x] ISC-56: `index_file = ""` disables the not-in-index check.
+- [x] ISC-57: `lint` exits non-zero iff a `[lint] fail_on` check fails.
+- [x] ISC-58: `lint` returns a structured `LintResult` (counts + per-issue lists); `finish` consumes the object directly, no text-scraping.
+- [x] ISC-59: Each lint check is individually toggleable from `[lint]` config.
+- [x] ISC-60: Golden-output test — a fixture wiki produces a byte-locked report string.
 
 ### Discovery (optional, pluggable)
 
@@ -462,6 +462,22 @@ _No conjecture/refuted-by/learned/criterion-now entries yet — this section acc
 - ISC-65/-66/-67: `test_densify_pairs_and_apply` (bidirectional, idempotent), `test_densify_topk_limits_neighbours`.
 - ISC-68: `test_parse_qmd_hits`.
 - ISC-69: `test_related_cli_missing_qmd_exits_one` / densify equivalent.
+
+### Checkpoint 5 — GitHelpers + Lint + Finish (2026-06-28, py3.11.15, dev+all)
+
+- Suite: `140 passed, 2 deselected`; `ruff` clean; coverage TOTAL **93%**. New: `git.py` 87%, `lint.py` 90%, `finish.py` 94%.
+- ISC-41: `test_finish_missing_article` / `test_finish_no_article_path`.
+- ISC-42: `test_finish_provenance_failure` — article not citing source is rejected.
+- ISC-43/-44: `test_finish_aborts_on_lint_failure` — broken link fails lint, aborts finish.
+- ISC-45/-46/-47: `test_finish_commits_without_push` (commit + no push + `commit_template` message), `test_finish_pushes_when_opted_in`.
+- ISC-48: `test_finish_non_git_graceful` + `git.is_repo` False on a plain dir.
+- ISC-49/-50/-51: `test_fixture_detects_issues` (broken / missing / orphan); `test_orphans_are_body_inbound_only` proves frontmatter `related` does NOT count.
+- ISC-52/-53/-54: `test_report_has_density_top_and_category`.
+- ISC-55/-56: not-in-index list; `test_empty_index_disables_check`.
+- ISC-57: `test_fails_respects_fail_on` + CLI exit 0/1.
+- ISC-58: structured `LintResult` (per-issue lists) consumed by `finish` directly.
+- ISC-59: `test_broken_check_toggleable` / `test_sources_check_toggleable`.
+- ISC-60: `test_golden_report` — byte-locked report vs `fixtures/lint_report.golden.txt`.
 
 _Remaining ISCs verified at their feature checkpoints._
 

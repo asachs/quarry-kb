@@ -10,7 +10,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from quarry import __version__, config, discovery, ingest
+from quarry import __version__, config, discovery, finish, ingest, lint
 from quarry.adapters import registry
 from quarry.errors import ConfigError, QuarryError
 
@@ -46,6 +46,23 @@ def cmd_ingest(args: argparse.Namespace) -> int:
     tail = "" if res["target_wiki_path"] else " --article <path>"
     print(f"\nthen: quarry finish {res['slug']}{tail}")
     return 0
+
+
+def cmd_finish(args: argparse.Namespace) -> int:
+    cfg = config.load()
+    res = finish.run(cfg, args.slug, article=args.article, push=args.push)
+    state = "committed" + (" + pushed" if res["pushed"] else "")
+    if not res["committed"]:
+        state = "verified (not a git repo — skipped commit)"
+    print(f"✓ provenance verified, lint clean, {state}: {res['article']}")
+    return 0
+
+
+def cmd_lint(args: argparse.Namespace) -> int:
+    cfg = config.load()
+    result = lint.run(cfg)
+    print(result.report)
+    return 1 if result.fails(cfg.lint.fail_on) else 0
 
 
 def _discovery_backend_or_exit(cfg) -> object | None:
@@ -109,6 +126,15 @@ def build_parser() -> argparse.ArgumentParser:
     pg.add_argument("--topic", help="wiki topic dir for the suggested target path")
     pg.add_argument("--force", action="store_true", help="overwrite raw / bypass dedup")
     pg.set_defaults(func=cmd_ingest)
+
+    pf = sub.add_parser("finish", help="verify provenance -> lint -> commit")
+    pf.add_argument("slug")
+    pf.add_argument("--article", help="wiki article path (if not in the manifest)")
+    pf.add_argument("--push", action="store_true", help="push after commit (default: no)")
+    pf.set_defaults(func=cmd_finish)
+
+    pl = sub.add_parser("lint", help="run the structural-health report")
+    pl.set_defaults(func=cmd_lint)
 
     pr = sub.add_parser("related", help="semantic link candidates for an article")
     pr.add_argument("article", help="wiki article path or name fragment")
