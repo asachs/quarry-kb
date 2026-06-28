@@ -70,7 +70,7 @@ found (run 'quarry init')`. `quarry init` writes this fully-commented default:
 # root is the dir containing quarry.toml unless set explicitly
 wiki = "wiki"                 # compiled articles (relative to root)
 raw  = "raw"                  # immutable source material
-raw_layout = "{year}/{month}/{date}_{slug}.{ext}"   # raw path template (tokens below)
+raw_layout = "{year}/{month}/{slug}.{ext}"   # raw path template (tokens below; {slug} already carries the date by default — don't re-add {date})
 manifest_dir = ".quarry"      # compile-manifests (gitignored)
 
 [frontmatter]

@@ -36,7 +36,7 @@ DISCOVERY_MODE_CHOICES = ("auto", "on", "off")
 class StoreConfig:
     wiki: str = "wiki"
     raw: str = "raw"
-    raw_layout: str = "{year}/{month}/{date}_{slug}.{ext}"
+    raw_layout: str = "{year}/{month}/{slug}.{ext}"
     manifest_dir: str = ".quarry"
     root: str | None = None  # explicit store root; None => dir containing quarry.toml
 
@@ -278,7 +278,8 @@ DEFAULT_TOML = """\
 # root = "/abs/path/to/store"
 wiki = "wiki"                 # compiled articles (relative to root)
 raw  = "raw"                  # immutable source material (relative to root)
-raw_layout = "{year}/{month}/{date}_{slug}.{ext}"   # raw path template (relative to raw/)
+# raw_layout tokens: {year} {month} {date} {slug} {kebab_title} {ext} {topic} {source_id}
+raw_layout = "{year}/{month}/{slug}.{ext}"   # raw path template (relative to raw/)
 manifest_dir = ".quarry"      # compile-manifests (gitignored)
 
 [frontmatter]

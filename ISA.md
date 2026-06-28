@@ -5,10 +5,10 @@ project: Quarry
 effort: deep
 effort_source: explicit
 phase: execute
-progress: 19/100
+progress: 29/100
 mode: interactive
 started: 2026-06-28T14:15:00Z
-updated: 2026-06-28T15:05:00Z
+updated: 2026-06-28T15:40:00Z
 ---
 
 ## Problem
@@ -84,20 +84,20 @@ Generalise `bin/kb` into **Quarry**: an installable, MIT-licensed, config-driven
 
 ### Store & root discovery
 
-- [ ] ISC-20: Store root is discovered by walking up from CWD to the directory containing `quarry.toml`.
+- [x] ISC-20: Store root is discovered by walking up from CWD to the directory containing `quarry.toml`.
 - [x] ISC-21: An explicit `[store] root` in config overrides walk-up discovery.
-- [ ] ISC-22: Store path resolution works in a non-git directory (git is not required).
-- [ ] ISC-23: All `raw_layout` tokens — `{year} {month} {date} {slug} {kebab_title} {ext} {topic} {source_id}` — expand correctly.
-- [ ] ISC-24: Changing `raw_layout` in config changes the written raw path accordingly (config-matrix test).
-- [ ] ISC-25: The `slug` template from `[ingest]` drives the generated slug.
+- [x] ISC-22: Store path resolution works in a non-git directory (git is not required).
+- [x] ISC-23: All `raw_layout` tokens — `{year} {month} {date} {slug} {kebab_title} {ext} {topic} {source_id}` — expand correctly.
+- [x] ISC-24: Changing `raw_layout` in config changes the written raw path accordingly (config-matrix test).
+- [x] ISC-25: The `slug` template from `[ingest]` drives the generated slug.
 
 ### Manifest seam
 
-- [ ] ISC-26: `ingest` writes `{manifest_dir}/{slug}.json`.
-- [ ] ISC-27: The manifest contains all required keys: `slug, source_url, adapter, raw_path, content_sha256, target_wiki_path, required_frontmatter, must_cite_source, metadata`.
-- [ ] ISC-28: `content_sha256` equals the SHA-256 of the fetched content (round-trip assertion).
-- [ ] ISC-29: A manifest write → load round-trips to an equal object.
-- [ ] ISC-30: `finish` aborts (exit ≠ 0, clean message) when no manifest exists for the slug.
+- [x] ISC-26: `ingest` writes `{manifest_dir}/{slug}.json`.
+- [x] ISC-27: The manifest contains all required keys: `slug, source_url, adapter, raw_path, content_sha256, target_wiki_path, required_frontmatter, must_cite_source, metadata`.
+- [x] ISC-28: `content_sha256` equals the SHA-256 of the fetched content (round-trip assertion).
+- [x] ISC-29: A manifest write → load round-trips to an equal object.
+- [x] ISC-30: `finish` aborts (exit ≠ 0, clean message) when no manifest exists for the slug.
 
 ### Ingest
 
@@ -399,6 +399,7 @@ Generalise `bin/kb` into **Quarry**: an installable, MIT-licensed, config-driven
 - 2026-06-28 14:15: **Local-first** — CI workflow written and a release job defined, but GitHub remote + PyPI trusted-publishing deferred to André's review (avoids spending effort on account/token setup prematurely).
 - 2026-06-28 14:15: **ISC count is 100, under the E4 soft floor of 128** — show-your-math: the package's genuine verification surface is ~100 atomic probes across 11 modules + packaging + CI + docs. Decomposing to 128 would manufacture probes that don't map to real failure modes (the canonical showpiece makes the same call at 38 vs the E5 floor). If splitting later reveals real sub-probes (e.g. per-token `raw_layout` checks), IDs will extend as ISC-23.1/23.2 without renumbering.
 - 2026-06-28 14:15: Root discovery changes signal from `bin/kb`'s "dir containing `wiki/`+`raw/`" to "dir containing `quarry.toml`" — the config file becomes the marker, consistent with generic-core.
+- 2026-06-28 15:40: **`raw_layout` default corrected** from the spec's `{year}/{month}/{date}_{slug}.{ext}` to `{year}/{month}/{slug}.{ext}`. The spec's defaults were self-contradictory: `{slug}` already defaults to `{date}_{kebab_title}`, so `{date}_{slug}` double-prefixed the date (`.../2026-06-28_2026-06-28_hello.md`). Caught by `test_make_raw_path_default_layout`. `{slug}` is the named file; the layout organises by `{year}/{month}` and must not re-add `{date}`. SPEC.md §4 reconciled. (`{date}` token remains available for users who want a title-only slug.)
 
 ## Changelog
 
@@ -419,6 +420,19 @@ _No conjecture/refuted-by/learned/criterion-now entries yet — this section acc
 - ISC-14: `test_missing_config_exit_2` — stderr exactly `quarry: no quarry.toml found (run 'quarry init')`, exit 2.
 - ISC-15/-16/-17/-19/-21: covered by `tests/test_config.py` (unknown-key warn, type+enum errors, minimal defaults, `[tool.quarry]` fallback, explicit root).
 - ISC-79/-80: `test_unknown_command_errors` (non-zero), exit-code paths 0/1/2 all exercised.
+
+### Checkpoint 2 — StoreAndPaths + ManifestSeam (2026-06-28, py3.11.15)
+
+- Suite: `58 passed`; `ruff check .` → All checks passed; coverage TOTAL **97%** (store.py 95%, manifest.py 100%).
+- ISC-20/-22: `test_root_discovery_nested_non_git` — root found by walk-up from a nested dir with no `.git` anywhere.
+- ISC-23: `test_all_tokens_expand` — every documented token (`year month date slug kebab_title ext topic source_id`) renders in `raw_layout`.
+- ISC-24: `test_make_raw_path_matrix` (3 layouts) — a different `raw_layout` yields a different path.
+- ISC-25: `test_make_slug_default_template` / `test_make_slug_custom_template` — `[ingest] slug` template drives the slug; `{slug}` in its own template is a clean ConfigError.
+- ISC-26: `test_write_creates_json_at_manifest_path` — manifest at `{manifest_dir}/{slug}.json`.
+- ISC-27: `test_build_has_all_required_keys` — all `REQUIRED_KEYS` present; `must_cite_source == raw_path`.
+- ISC-28: `test_content_sha256_matches` — `content_sha256` equals `sha256(content)`.
+- ISC-29: `test_roundtrip_equal` — write → load returns an equal object.
+- ISC-30: `test_load_missing_raises` — missing manifest → clean QuarryError.
 
 _Remaining ISCs verified at their feature checkpoints._
 
