@@ -5,10 +5,10 @@ project: Quarry
 effort: deep
 effort_source: explicit
 phase: execute
-progress: 29/100
+progress: 40/100
 mode: interactive
 started: 2026-06-28T14:15:00Z
-updated: 2026-06-28T15:40:00Z
+updated: 2026-06-28T16:20:00Z
 ---
 
 ## Problem
@@ -101,7 +101,7 @@ Generalise `bin/kb` into **Quarry**: an installable, MIT-licensed, config-driven
 
 ### Ingest
 
-- [ ] ISC-31: `ingest <url>` resolves the first matching enabled adapter.
+- [x] ISC-31: `ingest <url>` resolves the first matching enabled adapter.
 - [ ] ISC-32: `ingest` writes immutable raw material at the configured raw path.
 - [ ] ISC-33: `ingest` refuses to clobber existing raw without `--force` (exit ≠ 0).
 - [ ] ISC-34: `ingest` prints a human/agent-readable compile-spec to stdout.
@@ -110,7 +110,7 @@ Generalise `bin/kb` into **Quarry**: an installable, MIT-licensed, config-driven
 - [ ] ISC-37: `on_duplicate=warn` prints a warning and proceeds with ingest.
 - [ ] ISC-38: `on_duplicate=allow` ingests with no dedup interruption.
 - [ ] ISC-39: `--force` bypasses the dedup pre-check.
-- [ ] ISC-40: An adapter exception during fetch surfaces as a clean non-zero quarry error (no traceback).
+- [x] ISC-40: An adapter exception during fetch surfaces as a clean non-zero quarry error (no traceback).
 
 ### Finish & provenance
 
@@ -152,15 +152,15 @@ Generalise `bin/kb` into **Quarry**: an installable, MIT-licensed, config-driven
 
 ### Adapters & plugins
 
-- [ ] ISC-70: `adapters` lists registered adapters and marks which are enabled.
-- [ ] ISC-71: The `[adapters] enabled` allowlist gates which adapters actually run.
-- [ ] ISC-72: Third-party adapters are discoverable via the `quarry.adapters` entry-point group.
-- [ ] ISC-73: The youtube adapter parses a video id from `watch?v=`, `youtu.be/`, `/shorts/`, and `/embed/` URLs.
-- [ ] ISC-74: The youtube adapter returns content + metadata from a recorded cassette (no network).
-- [ ] ISC-75: The web adapter extracts main content via trafilatura from a recorded fixture (no network).
-- [ ] ISC-76: The web adapter returns the required metadata (`title, url, date, source_id`).
-- [ ] ISC-77: Exactly one live `@pytest.mark.integration` test exists per network adapter, excluded from the default run.
-- [ ] ISC-78: A missing adapter extra (e.g. `youtube-transcript-api`) yields a clean install hint, not an `ImportError` traceback.
+- [x] ISC-70: `adapters` lists registered adapters and marks which are enabled.
+- [x] ISC-71: The `[adapters] enabled` allowlist gates which adapters actually run.
+- [x] ISC-72: Third-party adapters are discoverable via the `quarry.adapters` entry-point group.
+- [x] ISC-73: The youtube adapter parses a video id from `watch?v=`, `youtu.be/`, `/shorts/`, and `/embed/` URLs.
+- [x] ISC-74: The youtube adapter returns content + metadata from a recorded cassette (no network).
+- [x] ISC-75: The web adapter extracts main content via trafilatura from a recorded fixture (no network).
+- [x] ISC-76: The web adapter returns the required metadata (`title, url, date, source_id`).
+- [x] ISC-77: Exactly one live `@pytest.mark.integration` test exists per network adapter, excluded from the default run.
+- [x] ISC-78: A missing adapter extra (e.g. `youtube-transcript-api`) yields a clean install hint, not an `ImportError` traceback.
 
 ### CLI & errors
 
@@ -433,6 +433,20 @@ _No conjecture/refuted-by/learned/criterion-now entries yet — this section acc
 - ISC-28: `test_content_sha256_matches` — `content_sha256` equals `sha256(content)`.
 - ISC-29: `test_roundtrip_equal` — write → load returns an equal object.
 - ISC-30: `test_load_missing_raises` — missing manifest → clean QuarryError.
+
+### Checkpoint 3 — Adapters (2026-06-28, py3.11.15, dev+all)
+
+- Suite: `82 passed, 2 deselected` (the integration tests); `ruff` clean; coverage TOTAL **95%** (registry/base 100%; web 86%, youtube 87% — uncovered lines are the network-only methods, exercised by the gated `@integration` tests).
+- ISC-31: `test_resolve_matches_first_enabled` — first enabled matching adapter wins.
+- ISC-40: `test_fetch_wraps_adapter_exception` / `..._passes_quarry_error_through` — adapter fault → clean `QuarryError`, no traceback.
+- ISC-70: `test_list_adapters_marks_enabled`, `test_adapters_command_lists` — `quarry adapters` lists + marks enabled.
+- ISC-71: `test_resolve_respects_enabled_allowlist` — disabled adapter not used even when it would match.
+- ISC-72: `test_entry_point_discovery` / `..._broken_plugin_skipped` — `quarry.adapters` entry points discovered; bad plugin skipped.
+- ISC-73: `test_youtube_video_id` (watch/youtu.be/shorts/embed).
+- ISC-74: `test_youtube_fetch_from_cassette` — content+metadata from monkeypatched network methods (hermetic).
+- ISC-75/-76: `test_web_extracts_from_fixture` — trafilatura extraction + metadata from fixture HTML (no network).
+- ISC-77: `test_youtube_live` / `test_web_live` marked `@integration`, excluded by default (confirmed: 2 deselected).
+- ISC-78: `test_youtube_missing_extra` / `test_web_missing_extra` — missing extra → clean install hint, not `ImportError`.
 
 _Remaining ISCs verified at their feature checkpoints._
 

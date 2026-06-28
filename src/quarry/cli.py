@@ -11,6 +11,7 @@ import argparse
 import sys
 
 from quarry import __version__, config
+from quarry.adapters import registry
 from quarry.errors import ConfigError, QuarryError
 
 
@@ -22,6 +23,13 @@ def cmd_init(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_adapters(args: argparse.Namespace) -> int:
+    cfg = config.load()
+    for name, enabled in registry.list_adapters(cfg):
+        print(f"  {name:12} ({'enabled' if enabled else 'disabled'})")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="quarry", description="knowledge-ingestion harness")
     p.add_argument("--version", action="version", version=f"quarry {__version__}")
@@ -30,6 +38,9 @@ def build_parser() -> argparse.ArgumentParser:
     pi = sub.add_parser("init", help="scaffold a documented quarry.toml in the current dir")
     pi.add_argument("--force", action="store_true", help="overwrite an existing quarry.toml")
     pi.set_defaults(func=cmd_init)
+
+    pa = sub.add_parser("adapters", help="list registered adapters and which are enabled")
+    pa.set_defaults(func=cmd_adapters)
 
     return p
 
