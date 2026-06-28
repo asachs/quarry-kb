@@ -1,0 +1,69 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "quarry"
+version = "0.1.0"
+description = "A config-driven knowledge-ingestion harness — the deterministic half of turning a source into a linked wiki article."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "André Sachs" }]
+keywords = ["knowledge", "wiki", "ingestion", "markdown", "cli"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Text Processing :: Markup :: Markdown",
+]
+# Core runtime dependency is PyYAML only (frontmatter parsing on the provenance
+# critical path). tomllib is stdlib at the 3.11 minimum — no tomli backport.
+dependencies = ["PyYAML>=6.0"]
+
+[project.optional-dependencies]
+youtube = ["youtube-transcript-api>=1.0"]
+web = ["trafilatura>=1.6"]
+discovery = []  # qmd is an external Node tool, not a pip dep — `quarry doctor` checks it.
+all = ["youtube-transcript-api>=1.0", "trafilatura>=1.6"]
+dev = ["pytest>=8.0", "ruff>=0.5", "coverage>=7.0"]
+
+[project.scripts]
+quarry = "quarry.cli:main"
+
+[project.entry-points."quarry.adapters"]
+# Built-in adapters are registered in code; this group is the third-party plugin seam.
+
+[project.urls]
+Homepage = "https://github.com/asachs/quarry"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/quarry"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "integration: live network test for an adapter (excluded from default runs)",
+]
+addopts = "-m 'not integration'"
+
+[tool.coverage.run]
+source = ["quarry"]
+branch = true
+omit = ["*/__main__.py"]  # thin `python -m quarry` shim; covered by an ISC-3 subprocess probe
+
+[tool.coverage.report]
+show_missing = true
+exclude_also = ["if __name__ == .__main__.:"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

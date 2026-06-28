@@ -3,3 +3,14 @@ EXTRACTION-SOURCE-kb.py
 .quarry/
 __pycache__/
 *.pyc
+
+# Python tooling
+.venv/
+.coverage
+htmlcov/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+uv.lock
