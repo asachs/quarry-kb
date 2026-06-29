@@ -51,3 +51,12 @@ def test_license_is_mit():
 def test_examples_quarry_toml_matches_init_default():
     """ISC-94: examples/quarry.toml is byte-identical to what `quarry init` writes."""
     assert (ROOT / "examples" / "quarry.toml").read_text() == DEFAULT_TOML
+
+
+def test_version_single_source_of_truth():
+    """__version__ must match the pyproject version (they drifted once — never again)."""
+    import re
+    from quarry import __version__
+    pp = (ROOT / "pyproject.toml").read_text()
+    m = re.search(r'^version = "([^"]+)"', pp, re.MULTILINE)
+    assert m and m.group(1) == __version__, f"pyproject {m and m.group(1)} != __version__ {__version__}"
