@@ -3,6 +3,7 @@
 import tomllib
 from pathlib import Path
 
+from quarry import __version__
 from quarry.config import DEFAULT_TOML
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -55,8 +56,4 @@ def test_examples_quarry_toml_matches_init_default():
 
 def test_version_single_source_of_truth():
     """__version__ must match the pyproject version (they drifted once — never again)."""
-    import re
-    from quarry import __version__
-    pp = (ROOT / "pyproject.toml").read_text()
-    m = re.search(r'^version = "([^"]+)"', pp, re.MULTILINE)
-    assert m and m.group(1) == __version__, f"pyproject {m and m.group(1)} != __version__ {__version__}"
+    assert PROJECT["version"] == __version__
