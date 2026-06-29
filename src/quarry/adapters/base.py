@@ -26,6 +26,9 @@ class Adapter:
     """Base adapter. Subclasses set ``name`` and implement ``matches`` + ``fetch``."""
 
     name: str = "base"
+    # The resolved Config, attached by registry.resolve_adapter so an adapter can read
+    # its own settings (e.g. youtube comments). None when constructed standalone.
+    cfg: object = None
 
     def matches(self, url: str) -> bool:  # pragma: no cover - interface
         raise NotImplementedError

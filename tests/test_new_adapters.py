@@ -204,6 +204,85 @@ def test_youtube_all_fail(monkeypatch):
         a._transcript_with_fallback("u", "v")
 
 
+def test_youtube_compose_description_only():
+    out = YouTubeAdapter._compose("Links: example.com", "", [], "spoken transcript")
+    assert out == "## Description\n\nLinks: example.com\n\n## Transcript\n\nspoken transcript"
+
+
+def test_youtube_compose_bare_transcript_when_empty():
+    # nothing extra -> bare transcript (back-compat, no headers)
+    assert YouTubeAdapter._compose("", "", [], "just the transcript") == "just the transcript"
+
+
+def test_youtube_compose_with_pinned_and_comments():
+    out = YouTubeAdapter._compose("desc", "PINNED note", ["(9👍) great", "(3👍) ok"], "TX")
+    assert "## Description\n\ndesc" in out
+    assert "## Pinned comment\n\nPINNED note" in out
+    assert "## Top comments (community — not the creator's claims)" in out
+    assert "1. (9👍) great" in out and "2. (3👍) ok" in out
+    assert out.endswith("## Transcript\n\nTX")
+
+
+def test_youtube_select_comments_ranks_and_finds_pinned():
+    comments = [
+        {"text": "meh", "like_count": 2, "is_pinned": False},
+        {"text": "creator note: errata here", "like_count": 0, "is_pinned": True},
+        {"text": "top one", "like_count": 50, "is_pinned": False},
+        {"text": "second", "like_count": 9, "is_pinned": False},
+    ]
+    pinned, top = YouTubeAdapter._select_comments(comments, top_n=2)
+    assert "errata here" in pinned
+    assert top == ["(50👍) top one", "(9👍) second"]  # ranked by likes, pinned excluded, capped
+
+
+def test_youtube_fetch_folds_in_description(monkeypatch):
+    a = YouTubeAdapter()
+    monkeypatch.setattr(a, "_fetch_oembed", lambda url: {"title": "T", "author_name": "A"})
+    monkeypatch.setattr(
+        a, "_fetch_info", lambda url, wc, mc: {"description": "Chapter links + sources"}
+    )
+    monkeypatch.setattr(a, "_transcript_with_fallback", lambda url, vid: "the words")
+    r = a.fetch("https://www.youtube.com/watch?v=abcdefghijk")
+    assert "## Description\n\nChapter links + sources" in r.content
+    assert "## Transcript\n\nthe words" in r.content
+    assert r.metadata["title"] == "T"
+
+
+def test_youtube_fetch_comments_gated_by_config(monkeypatch):
+    from quarry.config import YoutubeConfig
+
+    a = YouTubeAdapter()
+    info = {
+        "description": "d",
+        "comments": [{"text": "hi", "like_count": 5, "is_pinned": False}],
+    }
+    monkeypatch.setattr(a, "_fetch_oembed", lambda url: {})
+    monkeypatch.setattr(a, "_fetch_info", lambda url, wc, mc: info)
+    monkeypatch.setattr(a, "_transcript_with_fallback", lambda url, vid: "tx")
+
+    # comments disabled (no cfg) -> no comment sections
+    r = a.fetch("https://youtu.be/abcdefghijk")
+    assert "Top comments" not in r.content
+
+    # comments enabled via cfg -> section appears
+
+    class _Cfg:
+        youtube = YoutubeConfig(comments=True, top_comments=5)
+
+    a.cfg = _Cfg()
+    r = a.fetch("https://youtu.be/abcdefghijk")
+    assert "## Top comments" in r.content and "(5👍) hi" in r.content
+
+
+def test_youtube_fetch_survives_info_failure(monkeypatch):
+    a = YouTubeAdapter()
+    monkeypatch.setattr(a, "_fetch_oembed", lambda url: {})
+    monkeypatch.setattr(a, "_fetch_info", _raises(RuntimeError("yt-dlp boom")))
+    monkeypatch.setattr(a, "_transcript_with_fallback", lambda url, vid: "transcript only")
+    r = a.fetch("https://youtu.be/abcdefghijk")
+    assert r.content == "transcript only"  # metadata/comments best-effort, doesn't break fetch
+
+
 # --- integration (live, no-auth) — excluded from default runs ---------------
 
 

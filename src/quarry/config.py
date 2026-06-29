@@ -93,6 +93,12 @@ class FinishConfig:
 
 
 @dataclass
+class YoutubeConfig:
+    comments: bool = False  # capture pinned + top community comments (needs yt-dlp getcomments)
+    top_comments: int = 10  # how many top-by-likes comments to include when comments=true
+
+
+@dataclass
 class Config:
     """The fully-resolved configuration threaded through every command."""
 
@@ -105,6 +111,7 @@ class Config:
     discovery: DiscoveryConfig
     lint: LintConfig
     finish: FinishConfig
+    youtube: YoutubeConfig
 
 
 # Maps a quarry.toml table name to its dataclass + the Config attribute it fills.
@@ -116,6 +123,7 @@ _TABLES: dict[str, tuple[type, str]] = {
     "discovery": (DiscoveryConfig, "discovery"),
     "lint": (LintConfig, "lint"),
     "finish": (FinishConfig, "finish"),
+    "youtube": (YoutubeConfig, "youtube"),
 }
 
 
@@ -320,6 +328,14 @@ fail_on = ["broken_links", "missing_sources"]   # which checks make finish/lint 
 run_lint = true               # run the lint report as part of finish
 auto_push = false             # push after commit (otherwise push only with --push)
 commit_template = "wiki: {slug}"
+
+[youtube]
+# The youtube adapter always captures the video DESCRIPTION (via yt-dlp) into the raw.
+comments = false              # also capture the pinned + top community comments (needs yt-dlp
+                              # getcomments — slower; off by default keeps ingest fast). When on,
+                              # the pinned comment + top-by-likes are added, clearly labelled as
+                              # community content (not the creator's claims).
+top_comments = 10             # how many top-by-likes comments to include when comments = true
 """
 
 

@@ -4,6 +4,23 @@ All notable changes to Quarry are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and Quarry adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0]
+
+### Added
+- **YouTube: capture the video description (and, optionally, comments) into the raw.** The
+  youtube adapter now always folds the **video description** (via yt-dlp) into the raw as a
+  `## Description` section above the transcript — it carries source links, chapter
+  timestamps, and the creator's own summary. Best-effort: omitted if the `[youtube]` extra is
+  absent or extraction fails (transcript still written).
+- **Optional comments** via new `[youtube]` config (`comments`, default `false`;
+  `top_comments`, default `10`). When enabled, captures the **pinned comment** (creator
+  errata/links — high signal) and the **top-by-likes** comments, each labelled
+  `## Pinned comment` / `## Top comments (community — not the creator's claims)` so the
+  article writer treats them as context, not source truth. Off by default because it needs
+  yt-dlp's `getcomments` (slower); bounded via a `max_comments` cap (top-level only, no replies).
+  Config now reaches adapters: `registry.resolve_adapter` attaches the resolved `Config` to
+  the adapter (`adapter.cfg`).
+
 ## [0.4.0]
 
 ### Removed

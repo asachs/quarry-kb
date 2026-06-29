@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 # Distribution name (PyPI). The import package and CLI are both `quarry`; the
 # bare `quarry` distribution name was already taken on PyPI.
 name = "quarry-kb"
-version = "0.4.0"
+version = "0.5.0"
 description = "A config-driven knowledge-ingestion harness — the deterministic half of turning a source into a linked wiki article."
 readme = "README.md"
 requires-python = ">=3.11"

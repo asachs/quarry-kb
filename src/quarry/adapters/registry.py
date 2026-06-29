@@ -66,6 +66,7 @@ def resolve_adapter(cfg: Config, url: str) -> Adapter:
             continue  # enabled in config but not installed/registered
         adapter = cls()
         if adapter.matches(url):
+            adapter.cfg = cfg  # let the adapter read its own settings (e.g. youtube comments)
             return adapter
     raise QuarryError(f"no adapter matches URL (try 'quarry adapters'): {url}")
 
