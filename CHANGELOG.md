@@ -4,6 +4,22 @@ All notable changes to Quarry are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and Quarry adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0]
+
+### Added
+- New source adapters: **`reddit`** (public `.json`, stdlib-only), **`github`** (via
+  `gitingest`), **`pdf`** (PyMuPDF4LLM + auto Tesseract OCR for scanned pages),
+  **`instagram`** (best-effort caption + audio; public reels/posts only).
+- YouTube adapter gains a deterministic transcript **fallback chain**: captions →
+  yt-dlp auto-subs → local **faster-whisper** (audio via yt-dlp + ffmpeg).
+- `transcribe` module: local speech-to-text via faster-whisper.
+- New extras: `[reddit]` (none), `[github]`, `[pdf]`, `[instagram]`, `[whisper]`.
+  Heavy local models ship as optional extras, never core (PEP 771).
+
+### Principle
+- Adapters extract RAW content deterministically (no LLM, no API key); generative
+  steps (distillation, summarization, vision-reading) stay outside the harness.
+
 ## [Unreleased]
 
 ### Added

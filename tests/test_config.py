@@ -19,7 +19,7 @@ def test_minimal_config_applies_all_defaults(chtmp: Path):
     assert cfg.store.wiki == "wiki"
     assert cfg.store.manifest_dir == ".quarry"
     assert cfg.frontmatter.required == ["title", "updated", "sources", "related"]
-    assert cfg.adapters.enabled == ["youtube", "web"]
+    assert cfg.adapters.enabled == ["youtube", "reddit", "github", "instagram", "pdf", "web"]
     assert cfg.lint.fail_on == ["broken_links", "missing_sources"]
     assert cfg.finish.commit_template == "wiki: {slug}"
     assert cfg.root == chtmp.resolve()

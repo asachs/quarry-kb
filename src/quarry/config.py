@@ -59,7 +59,9 @@ class IngestConfig:
 
 @dataclass
 class AdaptersConfig:
-    enabled: list[str] = field(default_factory=lambda: ["youtube", "web"])
+    enabled: list[str] = field(
+        default_factory=lambda: ["youtube", "reddit", "github", "instagram", "pdf", "web"]
+    )
 
 
 @dataclass
@@ -293,7 +295,8 @@ slug = "{date}_{kebab_title}" # slug template
 on_duplicate = "refuse"       # refuse | warn | allow  (governs the dedup pre-check)
 
 [adapters]
-enabled = ["youtube", "web"]  # allowlist; entry-point adapters are gated by this
+# allowlist; order = resolution priority (specific adapters before the catch-all web)
+enabled = ["youtube", "reddit", "github", "instagram", "pdf", "web"]
 
 [discovery]
 backend = "qmd"               # qmd | none

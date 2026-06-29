@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 # Distribution name (PyPI). The import package and CLI are both `quarry`; the
 # bare `quarry` distribution name was already taken on PyPI.
 name = "quarry-kb"
-version = "0.1.0"
+version = "0.2.0"
 description = "A config-driven knowledge-ingestion harness — the deterministic half of turning a source into a linked wiki article."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -29,10 +29,18 @@ classifiers = [
 dependencies = ["PyYAML>=6.0"]
 
 [project.optional-dependencies]
-youtube = ["youtube-transcript-api>=1.0"]
+youtube = ["youtube-transcript-api>=1.0", "yt-dlp>=2024.0"]
 web = ["trafilatura>=1.6"]
+reddit = []  # stdlib-only (public .json endpoint)
+github = ["gitingest>=0.1"]
+pdf = ["pymupdf4llm>=0.0.17"]  # Tesseract (system binary) auto-used for scanned pages
+instagram = ["yt-dlp>=2024.0"]
+whisper = ["faster-whisper>=1.0"]  # local audio transcription fallback (youtube/instagram)
 discovery = []  # qmd is an external Node tool, not a pip dep — `quarry doctor` checks it.
-all = ["youtube-transcript-api>=1.0", "trafilatura>=1.6"]
+all = [
+    "youtube-transcript-api>=1.0", "yt-dlp>=2024.0", "trafilatura>=1.6",
+    "gitingest>=0.1", "pymupdf4llm>=0.0.17", "faster-whisper>=1.0",
+]
 dev = ["pytest>=8.0", "ruff>=0.5", "coverage>=7.0"]
 
 [project.scripts]

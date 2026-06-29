@@ -1,0 +1,255 @@
+"""Hermetic tests for v0.2 adapters: reddit, github, pdf, instagram + youtube fallback."""
+
+import sys
+
+import pytest
+
+from quarry import transcribe
+from quarry.adapters import registry
+from quarry.adapters.github import GitHubAdapter
+from quarry.adapters.instagram import InstagramAdapter
+from quarry.adapters.pdf import PdfAdapter
+from quarry.adapters.reddit import RedditAdapter
+from quarry.adapters.youtube import YouTubeAdapter, _vtt_to_text
+from quarry.errors import QuarryError
+
+
+def _raises(exc):
+    def _f(*_a, **_k):
+        raise exc
+
+    return _f
+
+
+# --- registry resolution (default enabled now includes the new adapters) ----
+
+
+@pytest.mark.parametrize(
+    "url,expected",
+    [
+        ("https://www.reddit.com/r/python/comments/abc/title/", "reddit"),
+        ("https://github.com/asachs/quarry-kb", "github"),
+        ("https://www.instagram.com/reel/XYZ/", "instagram"),
+        ("https://example.com/paper.pdf", "pdf"),
+        ("https://www.youtube.com/watch?v=abcdefghijk", "youtube"),
+        ("https://example.com/article", "web"),
+    ],
+)
+def test_resolve(cfg, url, expected):
+    assert registry.resolve_adapter(cfg, url).name == expected
+
+
+# --- reddit ------------------------------------------------------------------
+
+_REDDIT = [
+    {"data": {"children": [{"kind": "t3", "data": {
+        "id": "abc", "title": "Test Post", "author": "alice", "subreddit": "python",
+        "selftext": "body text here", "created_utc": 1700000000,
+    }}]}},
+    {"data": {"children": [
+        {"kind": "t1", "data": {"author": "bob", "body": "great point", "score": 5}},
+        {"kind": "t1", "data": {"author": "carol", "body": "i agree", "score": 2}},
+        {"kind": "more", "data": {}},
+    ]}},
+]
+
+
+def test_reddit_matches():
+    a = RedditAdapter()
+    assert a.matches("https://reddit.com/r/x/comments/y/z/")
+    assert not a.matches("https://example.com")
+
+
+def test_reddit_fetch(monkeypatch):
+    a = RedditAdapter()
+    monkeypatch.setattr(a, "_fetch_json", lambda url: _REDDIT)
+    r = a.fetch("https://reddit.com/r/python/comments/abc/test/")
+    assert r.metadata["title"] == "Test Post"
+    assert r.metadata["author"] == "u/alice"
+    assert r.metadata["source_id"] == "abc"
+    assert r.metadata["date"] == "2023-11-14"  # from created_utc
+    assert "body text here" in r.content
+    assert "u/bob" in r.content and "great point" in r.content
+
+
+def test_reddit_link_post(monkeypatch):
+    a = RedditAdapter()
+    listing = [
+        {"data": {"children": [{"kind": "t3", "data": {
+            "id": "z9", "title": "Cool link", "author": "dave", "subreddit": "news",
+            "selftext": "", "url": "https://example.com/story",
+        }}]}},
+        {"data": {"children": []}},
+    ]
+    monkeypatch.setattr(a, "_fetch_json", lambda url: listing)
+    r = a.fetch("https://reddit.com/r/news/comments/z9/cool/")
+    assert "Link post: https://example.com/story" in r.content
+    assert r.metadata["date"]  # defaulted to today (no created_utc)
+
+
+def test_transcribe_available():
+    assert transcribe.available() is True  # faster-whisper installed via [whisper]/[all]
+
+
+def test_reddit_bad_shape(monkeypatch):
+    a = RedditAdapter()
+    monkeypatch.setattr(a, "_fetch_json", lambda url: [{}])
+    with pytest.raises(QuarryError, match="unexpected response"):
+        a.fetch("https://reddit.com/x")
+
+
+# --- github ------------------------------------------------------------------
+
+
+def test_github_matches():
+    a = GitHubAdapter()
+    assert a.matches("https://github.com/o/r")
+    assert not a.matches("https://gitlab.com/o/r")
+
+
+def test_github_fetch(monkeypatch):
+    a = GitHubAdapter()
+    monkeypatch.setattr(a, "_ingest", lambda url: ("SUMMARY", "TREE", "CONTENT"))
+    r = a.fetch("https://github.com/asachs/quarry-kb")
+    assert r.metadata["title"] == "asachs/quarry-kb"
+    assert r.metadata["author"] == "asachs"
+    assert r.metadata["source_id"] == "asachs/quarry-kb"
+    assert all(s in r.content for s in ("SUMMARY", "TREE", "CONTENT"))
+
+
+def test_github_missing_extra(monkeypatch):
+    monkeypatch.setitem(sys.modules, "gitingest", None)
+    with pytest.raises(QuarryError, match=r"\[github\] extra"):
+        GitHubAdapter()._ingest("https://github.com/o/r")
+
+
+# --- pdf ---------------------------------------------------------------------
+
+
+def test_pdf_matches():
+    a = PdfAdapter()
+    assert a.matches("https://x.com/f.pdf")
+    assert a.matches("/tmp/local.pdf")
+    assert not a.matches("https://x.com/page")
+
+
+def test_pdf_fetch(monkeypatch, tmp_path):
+    a = PdfAdapter()
+    p = tmp_path / "doc.pdf"
+    p.write_bytes(b"%PDF-1.4")
+    monkeypatch.setattr(a, "_local_path", lambda url: (p, False))
+    meta = {"title": "My Doc", "author": "Jane"}
+    monkeypatch.setattr(a, "_to_markdown", lambda path: ("# Heading\n\nbody", meta))
+    r = a.fetch(str(p))
+    assert r.metadata["title"] == "My Doc"
+    assert r.metadata["author"] == "Jane"
+    assert "# Heading" in r.content
+
+
+def test_pdf_empty_raises(monkeypatch, tmp_path):
+    a = PdfAdapter()
+    p = tmp_path / "s.pdf"
+    p.write_bytes(b"%PDF")
+    monkeypatch.setattr(a, "_local_path", lambda url: (p, False))
+    monkeypatch.setattr(a, "_to_markdown", lambda path: ("", {}))
+    with pytest.raises(QuarryError, match="no extractable text"):
+        a.fetch(str(p))
+
+
+def test_pdf_missing_extra(monkeypatch, tmp_path):
+    for m in ("pymupdf", "pymupdf4llm"):
+        monkeypatch.setitem(sys.modules, m, None)
+    p = tmp_path / "s.pdf"
+    p.write_bytes(b"%PDF")
+    with pytest.raises(QuarryError, match=r"\[pdf\] extra"):
+        PdfAdapter()._to_markdown(p)
+
+
+# --- instagram ---------------------------------------------------------------
+
+
+def test_instagram_matches():
+    a = InstagramAdapter()
+    assert a.matches("https://www.instagram.com/reel/ABC/")
+    assert a.matches("https://instagram.com/p/XYZ/")
+    assert not a.matches("https://instagram.com/someuser")
+
+
+def test_instagram_caption_only(monkeypatch):
+    a = InstagramAdapter()
+    info = {"description": "My reel caption\nsecond line", "uploader": "creator"}
+    monkeypatch.setattr(a, "_info", lambda url: info)
+    monkeypatch.setattr(transcribe, "available", lambda: False)
+    r = a.fetch("https://www.instagram.com/reel/ABC/")
+    assert r.metadata["author"] == "creator"
+    assert r.metadata["source_id"] == "ABC"
+    assert r.metadata["title"] == "My reel caption"
+    assert "My reel caption" in r.content
+
+
+def test_instagram_login_required(monkeypatch):
+    a = InstagramAdapter()
+    monkeypatch.setattr(a, "_info", _raises(RuntimeError("You need to log in")))
+    with pytest.raises(QuarryError, match="login required or rate-limited"):
+        a.fetch("https://www.instagram.com/reel/ABC/")
+
+
+def test_instagram_audio_transcript(monkeypatch):
+    a = InstagramAdapter()
+    monkeypatch.setattr(a, "_info", lambda url: {"description": "cap", "uploader": "c"})
+    monkeypatch.setattr(transcribe, "available", lambda: True)
+    monkeypatch.setattr(a, "_audio", lambda url, d: "/tmp/a.wav")
+    monkeypatch.setattr(transcribe, "transcribe", lambda p: "spoken words here")
+    r = a.fetch("https://instagram.com/reel/ABC/")
+    assert "spoken words here" in r.content
+
+
+# --- youtube fallback chain --------------------------------------------------
+
+
+def test_vtt_to_text():
+    vtt = (
+        "WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nHello <c>world</c>\n\n"
+        "2\n00:00:02.000 --> 00:00:03.000\nHello <c>world</c>\nNext line\n"
+    )
+    assert _vtt_to_text(vtt) == "Hello world Next line"
+
+
+def test_youtube_falls_back_to_subs(monkeypatch):
+    a = YouTubeAdapter()
+    monkeypatch.setattr(a, "_fetch_transcript", _raises(QuarryError("no captions")))
+    monkeypatch.setattr(a, "_ytdlp_subs", lambda url: "subtitle transcript")
+    out = a._transcript_with_fallback("https://youtu.be/abcdefghijk", "abcdefghijk")
+    assert out == "subtitle transcript"
+
+
+def test_youtube_falls_back_to_whisper(monkeypatch):
+    a = YouTubeAdapter()
+    monkeypatch.setattr(a, "_fetch_transcript", lambda vid: "")
+    monkeypatch.setattr(a, "_ytdlp_subs", lambda url: "")
+    monkeypatch.setattr(a, "_whisper_fallback", lambda url: "whispered text")
+    assert a._transcript_with_fallback("u", "v") == "whispered text"
+
+
+def test_youtube_all_fail(monkeypatch):
+    a = YouTubeAdapter()
+    for m in ("_fetch_transcript", "_ytdlp_subs", "_whisper_fallback"):
+        monkeypatch.setattr(a, m, _raises(QuarryError("nope")))
+    with pytest.raises(QuarryError, match="no transcript via captions"):
+        a._transcript_with_fallback("u", "v")
+
+
+# --- integration (live, no-auth) — excluded from default runs ---------------
+
+
+@pytest.mark.integration
+def test_reddit_live():
+    r = RedditAdapter().fetch("https://www.reddit.com/r/python/about.json".replace("/about.json", "/"))
+    assert r.content and r.metadata["title"]
+
+
+@pytest.mark.integration
+def test_github_live():
+    r = GitHubAdapter().fetch("https://github.com/octocat/Hello-World")
+    assert r.metadata["source_id"] == "octocat/Hello-World"
+    assert r.content
