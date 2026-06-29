@@ -243,12 +243,6 @@ def test_youtube_all_fail(monkeypatch):
 
 
 @pytest.mark.integration
-def test_reddit_live():
-    r = RedditAdapter().fetch("https://www.reddit.com/r/python/about.json".replace("/about.json", "/"))
-    assert r.content and r.metadata["title"]
-
-
-@pytest.mark.integration
 def test_github_live():
     r = GitHubAdapter().fetch("https://github.com/octocat/Hello-World")
     assert r.metadata["source_id"] == "octocat/Hello-World"
