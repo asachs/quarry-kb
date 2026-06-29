@@ -78,6 +78,7 @@ class LintConfig:
     broken_links: bool = True
     require_sources_on_disk: bool = True
     orphan_check: bool = True
+    groundedness: bool = False  # flag bolded named terms not traceable to cited text sources
     index_file: str = "index.md"  # "" disables the not-in-index check
     fail_on: list[str] = field(
         default_factory=lambda: ["broken_links", "missing_sources"]
@@ -309,8 +310,10 @@ densify_topk = 6              # mutual top-K for the densify sweep
 broken_links = true
 require_sources_on_disk = true
 orphan_check = true           # inbound-from-body only (frontmatter related: does NOT count)
+groundedness = false          # flag bolded names absent from cited sources (anti-fabrication)
 index_file = "index.md"       # "" disables the not-in-index check
 fail_on = ["broken_links", "missing_sources"]   # which checks make finish/lint exit non-zero
+# add "groundedness" to fail_on to make finish ABORT on ungrounded terms (else advisory-only)
 
 [finish]
 # what `quarry finish` does after provenance + lint pass

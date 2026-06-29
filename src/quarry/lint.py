@@ -23,6 +23,7 @@ _CHECK_ATTR = {
     "missing_sources": "missing",
     "orphans": "orphans",
     "not_indexed": "not_indexed",
+    "groundedness": "ungrounded",
 }
 
 
@@ -33,6 +34,7 @@ class LintResult:
     orphans: list[str] = field(default_factory=list)
     no_outgoing: list[str] = field(default_factory=list)
     not_indexed: list[str] = field(default_factory=list)
+    ungrounded: list[tuple[str, str]] = field(default_factory=list)
     total_articles: int = 0
     total_links: int = 0
     report: str = ""
@@ -99,6 +101,54 @@ def _title(path: Path) -> str:
     return t.strip('"') if isinstance(t, str) else path.stem
 
 
+# Groundedness: a bolded named term whose content words are ALL absent from the
+# article's cited text sources is almost certainly fabricated or bled in from
+# another source. Word-level (not phrase-level) matching keeps faithful paraphrase
+# and synthesis from being flagged — only wholly-foreign named things surface.
+_GND_STOP = frozenset(
+    "the a an and or to of in with for on new best top build builds guide".split()
+)
+
+
+def _gwords(text: str) -> list[str]:
+    """Lowercased content words (>2 chars, non-stopword) from arbitrary text."""
+    return [
+        w
+        for w in re.sub(r"[^a-z0-9]+", " ", text.lower()).split()
+        if len(w) > 2 and w not in _GND_STOP
+    ]
+
+
+def _bold_named_terms(content: str) -> list[str]:
+    """`**...**` spans that contain an uppercase letter (named things, not emphasis)."""
+    seen: set[str] = set()
+    out: list[str] = []
+    for m in re.finditer(r"\*\*(.+?)\*\*", content, flags=re.DOTALL):
+        term = m.group(1).strip()
+        if not any(c.isupper() for c in term) or not _gwords(term):
+            continue
+        key = term.lower()
+        if key not in seen:
+            seen.add(key)
+            out.append(term)
+    return out
+
+
+def _source_words(path: Path, cfg: Config) -> set[str]:
+    """Content words from every readable, local, text (.md/.txt) cited source."""
+    hay: set[str] = set()
+    for s in _sources(path, cfg.frontmatter.sources_field):
+        if not _is_local_source(s):
+            continue
+        p = cfg.root / s
+        if p.suffix.lower() in {".md", ".txt"} and p.is_file():
+            try:
+                hay.update(_gwords(p.read_text(encoding="utf-8")))
+            except (OSError, UnicodeDecodeError):
+                continue
+    return hay
+
+
 # ---------------------------------------------------------------------------
 # run
 # ---------------------------------------------------------------------------
@@ -144,6 +194,17 @@ def run(cfg: Config) -> LintResult:
 
     no_outgoing = [a for a in articles if not outgoing.get(a)]
 
+    ungrounded: list[tuple[str, str]] = []
+    if cfg.lint.groundedness:
+        for a in articles:
+            hay = _source_words(wiki / a, cfg)
+            if not hay:  # no checkable text source — can't verify, don't flag
+                continue
+            content = (wiki / a).read_text(encoding="utf-8")
+            for term in _bold_named_terms(content):
+                if not any(w in hay for w in _gwords(term)):
+                    ungrounded.append((a, term))
+
     not_indexed: list[str] = []
     if index:
         indexed: set[str] = set()
@@ -157,6 +218,7 @@ def run(cfg: Config) -> LintResult:
     report = _format(
         wiki, articles, incoming, outgoing, broken, missing,
         sorted(orphans), no_outgoing, not_indexed, total_links,
+        sorted(ungrounded) if cfg.lint.groundedness else None,
     )
     return LintResult(
         broken=sorted(broken),
@@ -164,6 +226,7 @@ def run(cfg: Config) -> LintResult:
         orphans=sorted(orphans),
         no_outgoing=sorted(no_outgoing),
         not_indexed=sorted(not_indexed),
+        ungrounded=sorted(ungrounded),
         total_articles=len(articles),
         total_links=total_links,
         report=report,
@@ -172,7 +235,7 @@ def run(cfg: Config) -> LintResult:
 
 def _format(
     wiki, articles, incoming, outgoing, broken, missing,
-    orphans, no_outgoing, not_indexed, total_links,
+    orphans, no_outgoing, not_indexed, total_links, ungrounded=None,
 ) -> str:
     n = len(articles)
     avg = total_links / n if n else 0
@@ -200,7 +263,14 @@ def _format(
     e(f"Zero outgoing links:   {len(no_outgoing)}")
     e(f"Broken links:          {len(broken)}")
     e(f"Missing source files:  {len(missing)}")
+    if ungrounded is not None:
+        e(f"Ungrounded terms:      {len(ungrounded)}")
     e("")
+    if ungrounded:
+        e("--- UNGROUNDED TERMS (bolded names not traceable to cited sources) ---")
+        for a, term in ungrounded:
+            e(f"  {a} -> {term}")
+        e("")
     if broken:
         e("--- BROKEN LINKS ---")
         for a, t in sorted(broken):

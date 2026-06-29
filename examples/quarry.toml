@@ -36,8 +36,10 @@ densify_topk = 6              # mutual top-K for the densify sweep
 broken_links = true
 require_sources_on_disk = true
 orphan_check = true           # inbound-from-body only (frontmatter related: does NOT count)
+groundedness = false          # flag bolded names absent from cited sources (anti-fabrication)
 index_file = "index.md"       # "" disables the not-in-index check
 fail_on = ["broken_links", "missing_sources"]   # which checks make finish/lint exit non-zero
+# add "groundedness" to fail_on to make finish ABORT on ungrounded terms (else advisory-only)
 
 [finish]
 # what `quarry finish` does after provenance + lint pass

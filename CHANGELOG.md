@@ -4,6 +4,22 @@ All notable changes to Quarry are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and Quarry adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0]
+
+### Added
+- **Groundedness lint check** (`[lint] groundedness`, default off) — an anti-fabrication /
+  anti-cross-source-bleed guardrail. For each article it extracts **bolded named terms**
+  (`**...**` spans containing an uppercase letter — build names, products, proper nouns)
+  and flags any whose content words are **all absent** from the article's cited *text*
+  sources (`.md`/`.txt`; PDFs/binaries and source-less articles are skipped — unverifiable).
+  Word-level (not phrase-level) matching means faithful paraphrase and synthesis are *not*
+  flagged — only wholly-foreign named things surface. Advisory by default; add
+  `"groundedness"` to `[lint] fail_on` to make `quarry finish` abort on ungrounded terms.
+  Reports under `--- UNGROUNDED TERMS ---` with an `Ungrounded terms:` count.
+  Motivation: an LLM compiling an article pulled build names from a *neighbouring* cited
+  source during cross-linking and merged them into an article that credited only one
+  source — code catches what trusting the model didn't.
+
 ## [0.2.3]
 
 ### Added

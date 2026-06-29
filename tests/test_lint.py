@@ -109,3 +109,67 @@ def test_lint_cli_exit_zero_when_clean(chtmp: Path):
     c = config.load(chtmp)
     _w(c.root / "wiki" / "a.md", "---\ntitle: A\n---\n\nclean body\n")
     assert main(["lint"]) == 0
+
+
+# --- groundedness: anti-fabrication / anti-cross-source-bleed ---------------
+
+_RAW = (
+    "---\nsource: https://youtu.be/x\n---\n\n"
+    "We kick off with the winners. Rogue with a death trap build. "
+    "Barbarian uses minions ancient summoner. Sorcerer wants firewall, "
+    "and the frost and ice builds look strong.\n"
+)
+
+
+def _grounded_store(chtmp: Path, body: str, *, on: bool = True, sources: str | None = None):
+    (chtmp / "quarry.toml").write_text(
+        f"[lint]\ngroundedness = {'true' if on else 'false'}\n"
+    )
+    c = config.load(chtmp)
+    _w(c.root / "raw" / "vid.md", _RAW)
+    src = sources if sources is not None else "  - raw/vid.md"
+    _w(c.root / "wiki" / "g.md", f"---\ntitle: G\nsources:\n{src}\n---\n\n{body}\n")
+    return c
+
+
+def test_groundedness_flags_foreign_named_terms(chtmp: Path):
+    """A bolded name whose words are all absent from the cited raw is flagged."""
+    body = (
+        "**Death Trap** is great. **Minions / ancient summoner** dominate. "
+        "The **frost (ice)** builds are fine. But **Mighty Throw** and "
+        "**Signet of the Pelican** are not in the source. Also **not** emphasis."
+    )
+    r = lint.run(_grounded_store(chtmp, body))
+    flagged = [t for _, t in r.ungrounded]
+    assert "Mighty Throw" in flagged
+    assert "Signet of the Pelican" in flagged
+    # grounded / synthesised / emphasis terms are NOT flagged
+    assert "Death Trap" not in flagged
+    assert "Minions / ancient summoner" not in flagged
+    assert "frost (ice)" not in flagged
+    assert "not" not in flagged
+
+
+def test_groundedness_off_by_default(chtmp: Path):
+    r = lint.run(_grounded_store(chtmp, "**Mighty Throw** rules.", on=False))
+    assert r.ungrounded == []
+
+
+def test_groundedness_skips_when_no_text_source(chtmp: Path):
+    """No readable text source (e.g. only a PDF) -> can't verify, don't flag."""
+    r = lint.run(_grounded_store(chtmp, "**Mighty Throw** rules.", sources="  - raw/scan.pdf"))
+    assert r.ungrounded == []
+
+
+def test_groundedness_gateable_via_fail_on(chtmp: Path):
+    r = lint.run(_grounded_store(chtmp, "**Mighty Throw** rules."))
+    assert r.ungrounded  # something flagged
+    assert r.fails(["groundedness"]) is True
+    assert r.fails(["broken_links"]) is False
+
+
+def test_groundedness_report_section(chtmp: Path):
+    report = lint.run(_grounded_store(chtmp, "**Mighty Throw** rules.")).report
+    assert "Ungrounded terms:" in report
+    assert "UNGROUNDED TERMS" in report
+    assert "Mighty Throw" in report
