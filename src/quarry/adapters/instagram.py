@@ -1,12 +1,16 @@
 """Instagram adapter — best-effort caption + audio transcript for public reels/posts.
 
 Deterministic half only: yt-dlp metadata (caption) + optional faster-whisper audio
-transcript. Frame/overlay vision-reading is agent-side, not here. As of 2026 Instagram
-blocks logged-out extraction even for public reels ("empty media response"), so cookies
-are effectively required: set ``QUARRY_INSTAGRAM_COOKIES`` (path to a Netscape cookies.txt
-from a logged-in browser) or ``QUARRY_INSTAGRAM_COOKIES_FROM_BROWSER`` (e.g. ``firefox``).
-Without them the adapter raises a clean, actionable error. Requires the ``[instagram]``
-extra (yt-dlp); audio transcript also needs ``[whisper]``.
+transcript. Frame/overlay vision-reading is agent-side, not here.
+
+PUBLIC reels remain fetchable WITHOUT login/cookies in 2026, but Instagram's mid-2026
+anonymous-access change means yt-dlp must use its Instagram impersonation rework (PR #17075,
+in yt-dlp master / the first stable after 2026.06.09) backed by ``curl_cffi`` (TLS/JA3
+target). The ``[instagram]`` extra pulls ``curl_cffi``; until a stable yt-dlp release carries
+PR #17075, install yt-dlp from master. Without that, fetch fails with "empty media response"
+and the adapter raises an actionable upgrade hint. Cookies (``QUARRY_INSTAGRAM_COOKIES`` /
+``QUARRY_INSTAGRAM_COOKIES_FROM_BROWSER``) are only needed for PRIVATE posts/stories.
+Audio transcript also needs the ``[whisper]`` extra.
 """
 
 from __future__ import annotations
@@ -109,17 +113,14 @@ class InstagramAdapter(Adapter):
             raise
         except Exception as e:  # noqa: BLE001 - classify into a clean message
             if any(h in str(e).lower() for h in _LOGIN_HINTS):
-                extra = (
-                    " (cookies ARE configured, so this is likely a rate-limit or a "
-                    "private/expired post)"
-                    if cookies_configured()
-                    else ""
-                )
                 raise QuarryError(
-                    "instagram: authentication required — logged-out extraction is blocked. "
-                    "Provide cookies via QUARRY_INSTAGRAM_COOKIES=/path/to/cookies.txt "
-                    "(Netscape format, exported from a logged-in browser) or "
-                    f"QUARRY_INSTAGRAM_COOKIES_FROM_BROWSER=firefox.{extra}"
+                    "instagram: extraction failed (empty media / login response). PUBLIC reels "
+                    "are still fetchable without cookies, but need yt-dlp's Instagram "
+                    "impersonation rework (PR #17075 — in yt-dlp master, or first stable "
+                    "after 2026.06.09) "
+                    "PLUS curl_cffi installed. Upgrade: pip install -U --pre 'yt-dlp' curl_cffi "
+                    "(or install yt-dlp from git master until the fix ships in a release). Only "
+                    "private posts/stories need cookies (QUARRY_INSTAGRAM_COOKIES)."
                 ) from e
             raise QuarryError(f"instagram fetch failed: {e}") from e
 

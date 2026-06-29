@@ -224,16 +224,16 @@ def test_instagram_caption_only(monkeypatch):
 def test_instagram_login_required(monkeypatch):
     a = InstagramAdapter()
     monkeypatch.setattr(a, "_info", _raises(RuntimeError("You need to log in")))
-    with pytest.raises(QuarryError, match="authentication required"):
+    with pytest.raises(QuarryError, match="yt-dlp"):
         a.fetch("https://www.instagram.com/reel/ABC/")
 
 
 def test_instagram_empty_media_response_classified(monkeypatch):
-    """The real 2026 failure ('empty media response') -> clean cookie guidance."""
+    """The real 2026 'empty media response' failure -> upgrade guidance (curl_cffi)."""
     a = InstagramAdapter()
     msg = "Instagram sent an empty media response. ... use --cookies-from-browser or --cookies"
     monkeypatch.setattr(a, "_info", _raises(RuntimeError(msg)))
-    with pytest.raises(QuarryError, match="QUARRY_INSTAGRAM_COOKIES"):
+    with pytest.raises(QuarryError, match="curl_cffi"):
         a.fetch("https://www.instagram.com/reel/ABC/")
 
 

@@ -4,6 +4,19 @@ All notable changes to Quarry are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and Quarry adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2]
+
+### Fixed
+- **Instagram: correct root cause — it's a yt-dlp version gap, not authentication.** Public
+  reels remain fetchable WITHOUT cookies; the mid-2026 "empty media response" failure is fixed
+  by yt-dlp's Instagram impersonation rework ([PR #17075](https://github.com/yt-dlp/yt-dlp/pull/17075),
+  merged 2026-06-28; in yt-dlp master / the first stable after 2026.06.09) backed by `curl_cffi`.
+  Verified end-to-end on a server from a non-residential IP. Changes: the `[instagram]` extra now
+  pulls `curl_cffi`; the failure message now points at the yt-dlp upgrade (and clarifies cookies
+  are only for private posts/stories), correcting 0.3.1's misleading "authentication required"
+  wording. Cookie support from 0.3.1 (`QUARRY_INSTAGRAM_COOKIES` /
+  `QUARRY_INSTAGRAM_COOKIES_FROM_BROWSER`) stays for private content.
+
 ## [0.3.1]
 
 ### Fixed
