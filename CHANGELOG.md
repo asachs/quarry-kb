@@ -4,6 +4,19 @@ All notable changes to Quarry are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and Quarry adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1]
+
+### Fixed
+- **Instagram adapter — cookie support + correct error classification.** As of 2026
+  Instagram blocks logged-out yt-dlp extraction even for public reels ("Instagram sent an
+  empty media response"). The adapter now accepts optional cookies — `QUARRY_INSTAGRAM_COOKIES`
+  (path to a Netscape cookies.txt from a logged-in browser) or
+  `QUARRY_INSTAGRAM_COOKIES_FROM_BROWSER` (e.g. `firefox`, or `chrome:Profile`) — passed
+  through to yt-dlp for both metadata and audio. Without cookies it now raises a clean,
+  actionable error naming the env vars (previously the "empty media response" phrasing fell
+  through the login-hint classifier and dumped the raw yt-dlp error). Mirrors the reddit-OAuth
+  optional-credential pattern: the core stays key-free; adapters may use optional credentials.
+
 ## [0.3.0]
 
 ### Added

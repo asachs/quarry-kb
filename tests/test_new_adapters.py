@@ -224,8 +224,34 @@ def test_instagram_caption_only(monkeypatch):
 def test_instagram_login_required(monkeypatch):
     a = InstagramAdapter()
     monkeypatch.setattr(a, "_info", _raises(RuntimeError("You need to log in")))
-    with pytest.raises(QuarryError, match="login required or rate-limited"):
+    with pytest.raises(QuarryError, match="authentication required"):
         a.fetch("https://www.instagram.com/reel/ABC/")
+
+
+def test_instagram_empty_media_response_classified(monkeypatch):
+    """The real 2026 failure ('empty media response') -> clean cookie guidance."""
+    a = InstagramAdapter()
+    msg = "Instagram sent an empty media response. ... use --cookies-from-browser or --cookies"
+    monkeypatch.setattr(a, "_info", _raises(RuntimeError(msg)))
+    with pytest.raises(QuarryError, match="QUARRY_INSTAGRAM_COOKIES"):
+        a.fetch("https://www.instagram.com/reel/ABC/")
+
+
+def test_instagram_cookie_opts(monkeypatch):
+    from quarry.adapters import instagram
+
+    monkeypatch.delenv("QUARRY_INSTAGRAM_COOKIES", raising=False)
+    monkeypatch.delenv("QUARRY_INSTAGRAM_COOKIES_FROM_BROWSER", raising=False)
+    assert instagram._cookie_opts() == {}
+    assert instagram.cookies_configured() is False
+
+    monkeypatch.setenv("QUARRY_INSTAGRAM_COOKIES", "/tmp/ig.txt")
+    assert instagram._cookie_opts() == {"cookiefile": "/tmp/ig.txt"}
+    assert instagram.cookies_configured() is True
+
+    monkeypatch.delenv("QUARRY_INSTAGRAM_COOKIES")
+    monkeypatch.setenv("QUARRY_INSTAGRAM_COOKIES_FROM_BROWSER", "firefox:work")
+    assert instagram._cookie_opts() == {"cookiesfrombrowser": ("firefox", "work", None, None)}
 
 
 def test_instagram_audio_transcript(monkeypatch):
