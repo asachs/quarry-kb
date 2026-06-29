@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 # Distribution name (PyPI). The import package and CLI are both `quarry`; the
 # bare `quarry` distribution name was already taken on PyPI.
 name = "quarry-kb"
-version = "0.3.2"
+version = "0.4.0"
 description = "A config-driven knowledge-ingestion harness — the deterministic half of turning a source into a linked wiki article."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -31,8 +31,6 @@ dependencies = ["PyYAML>=6.0"]
 [project.optional-dependencies]
 youtube = ["youtube-transcript-api>=1.0", "yt-dlp>=2024.0"]
 web = ["trafilatura>=1.6"]
-reddit = ["curl_cffi>=0.7"]  # browser TLS/JA3 impersonation — Reddit fingerprint-blocks pure-Python
-reddit-oauth = ["praw>=7.7"]  # reliable authenticated path (read-only client-credentials)
 github = ["gitingest>=0.1"]
 pdf = ["pymupdf4llm>=0.0.17"]  # Tesseract (system binary) auto-used for scanned pages
 instagram = ["yt-dlp>=2024.0", "curl_cffi>=0.7"]  # public reels (2026) need yt-dlp's IG impersonation rework (PR#17075, master / first stable >2026.06.09) + curl_cffi for the TLS target

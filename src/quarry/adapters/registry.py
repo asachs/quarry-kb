@@ -21,7 +21,6 @@ ENTRY_POINT_GROUP = "quarry.adapters"
 # Order matters for resolution: specific adapters before the catch-all web.
 _BUILTIN: dict[str, str] = {
     "youtube": "quarry.adapters.youtube:YouTubeAdapter",
-    "reddit": "quarry.adapters.reddit:RedditAdapter",
     "github": "quarry.adapters.github:GitHubAdapter",
     "instagram": "quarry.adapters.instagram:InstagramAdapter",
     "pdf": "quarry.adapters.pdf:PdfAdapter",

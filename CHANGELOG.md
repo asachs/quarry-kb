@@ -4,6 +4,18 @@ All notable changes to Quarry are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and Quarry adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0]
+
+### Removed
+- **Reddit adapter (and the `[reddit]` / `[reddit-oauth]` extras).** Reddit is no longer a
+  viable deterministic, no-auth source: TLS/JA3 fingerprint-blocking of pure-Python clients,
+  IP-reputation throttling with no `Retry-After`, and the Nov-2025 Responsible Builder Policy
+  gating all API apps (incl. read-only OAuth) behind manual approval. It violated Quarry's
+  "runnable without keys" principle and only ever half-worked. Removed the adapter, registry
+  entry, the two extras, and the `reddit` default in `[adapters] enabled`. To ingest a Reddit
+  thread, save the page/`.json` and use the `web`/`pdf` adapter, or supply your own adapter
+  via the entry-point hook. `curl_cffi` remains (the `instagram` extra uses it). See README.
+
 ## [0.3.2]
 
 ### Fixed

@@ -105,19 +105,11 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             "pip install 'quarry-kb[web]'",
             hard=False,
         )
-    if "reddit" in enabled:
-        from quarry.adapters.reddit import oauth_configured
-
+    if "instagram" in enabled:
         check(
-            "reddit adapter dep (curl_cffi)",
+            "instagram adapter dep (curl_cffi for yt-dlp impersonation)",
             _module_present("curl_cffi"),
-            "pip install 'quarry-kb[reddit]'",
-            hard=False,
-        )
-        check(
-            "reddit OAuth (reliable; else best-effort no-key)",
-            oauth_configured(),
-            "set QUARRY_REDDIT_CLIENT_ID/SECRET — see reddit adapter docs",
+            "pip install 'quarry-kb[instagram]'",
             hard=False,
         )
     _, status = discovery.check(cfg)

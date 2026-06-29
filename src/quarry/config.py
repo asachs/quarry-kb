@@ -60,7 +60,7 @@ class IngestConfig:
 @dataclass
 class AdaptersConfig:
     enabled: list[str] = field(
-        default_factory=lambda: ["youtube", "reddit", "github", "instagram", "pdf", "web"]
+        default_factory=lambda: ["youtube", "github", "instagram", "pdf", "web"]
     )
 
 
@@ -297,7 +297,7 @@ on_duplicate = "refuse"       # refuse | warn | allow  (governs the dedup pre-ch
 
 [adapters]
 # allowlist; order = resolution priority (specific adapters before the catch-all web)
-enabled = ["youtube", "reddit", "github", "instagram", "pdf", "web"]
+enabled = ["youtube", "github", "instagram", "pdf", "web"]
 
 [discovery]
 backend = "qmd"               # qmd | none

@@ -27,14 +27,22 @@ pip install quarry-kb[all]          # all shipped adapters
 pip install quarry-kb               # core only (PyYAML); add adapters as extras
 ```
 
-Adapters (each an extra): `youtube` (transcript + Whisper fallback), `web`, `reddit`
-(curl_cffi; optional OAuth via `[reddit-oauth]`), `github` (gitingest), `pdf`
-(PyMuPDF4LLM + OCR), `instagram` (best-effort), plus `whisper` for local audio
-transcription. Adapters extract raw content deterministically — no LLM. The core needs
-no API key; a few adapters take *optional* credentials (Reddit OAuth, Instagram cookies)
-for reliability — see each adapter's module docstring for setup (e.g.
-`src/quarry/adapters/reddit.py` documents the 2-minute Reddit "script" app + the
-`QUARRY_REDDIT_CLIENT_ID`/`QUARRY_REDDIT_CLIENT_SECRET` env vars).
+Adapters (each an extra): `youtube` (transcript + Whisper fallback), `web`,
+`github` (gitingest), `pdf` (PyMuPDF4LLM + OCR), `instagram`, plus `whisper` for
+local audio transcription. Adapters extract raw content deterministically — no LLM.
+The core needs no API key; a few adapters take *optional* credentials (e.g. Instagram
+cookies for private posts) — see each adapter's module docstring for setup.
+
+> **No Reddit adapter (removed in 0.4.0).** Reddit became a losing battle for a
+> deterministic, no-auth fetcher: it fingerprint-blocks pure-Python clients via TLS/JA3
+> (so it needed `curl_cffi` impersonation just to get a `200`), throttles by IP reputation
+> with **no `Retry-After`** (so back-off is guesswork), and its Nov-2025 *Responsible
+> Builder Policy* gates **all** API apps — including read-only OAuth — behind manual
+> approval. The net result was a fragile, perpetually-degrading path that violated Quarry's
+> "runnable without keys, deterministically" principle. Rather than ship something that
+> mostly doesn't work, it's gone. To ingest a Reddit thread, save the page (or its `.json`)
+> and feed it through the `web`/`pdf` adapter, or add your own adapter via the entry-point
+> hook. (`curl_cffi` lives on — the `instagram` extra uses it for yt-dlp's impersonation.)
 
 > Installed as `quarry-kb` on PyPI (the bare name was taken); the command and import
 > are both `quarry`.

@@ -1,4 +1,4 @@
-"""Hermetic tests for v0.2 adapters: reddit, github, pdf, instagram + youtube fallback."""
+"""Hermetic tests for adapters: github, pdf, instagram + youtube fallback."""
 
 import sys
 
@@ -9,7 +9,6 @@ from quarry.adapters import registry
 from quarry.adapters.github import GitHubAdapter
 from quarry.adapters.instagram import InstagramAdapter
 from quarry.adapters.pdf import PdfAdapter
-from quarry.adapters.reddit import RedditAdapter
 from quarry.adapters.youtube import YouTubeAdapter, _vtt_to_text
 from quarry.errors import QuarryError
 
@@ -27,7 +26,6 @@ def _raises(exc):
 @pytest.mark.parametrize(
     "url,expected",
     [
-        ("https://www.reddit.com/r/python/comments/abc/title/", "reddit"),
         ("https://github.com/asachs/quarry-kb", "github"),
         ("https://www.instagram.com/reel/XYZ/", "instagram"),
         ("https://example.com/paper.pdf", "pdf"),
@@ -37,99 +35,6 @@ def _raises(exc):
 )
 def test_resolve(cfg, url, expected):
     assert registry.resolve_adapter(cfg, url).name == expected
-
-
-# --- reddit ------------------------------------------------------------------
-
-_REDDIT = [
-    {"data": {"children": [{"kind": "t3", "data": {
-        "id": "abc", "title": "Test Post", "author": "alice", "subreddit": "python",
-        "selftext": "body text here", "created_utc": 1700000000,
-    }}]}},
-    {"data": {"children": [
-        {"kind": "t1", "data": {"author": "bob", "body": "great point", "score": 5}},
-        {"kind": "t1", "data": {"author": "carol", "body": "i agree", "score": 2}},
-        {"kind": "more", "data": {}},
-    ]}},
-]
-
-
-def test_reddit_matches():
-    a = RedditAdapter()
-    assert a.matches("https://reddit.com/r/x/comments/y/z/")
-    assert not a.matches("https://example.com")
-
-
-def test_reddit_fetch(monkeypatch):
-    a = RedditAdapter()
-    monkeypatch.setattr(a, "_fetch_json", lambda url: _REDDIT)
-    r = a.fetch("https://reddit.com/r/python/comments/abc/test/")
-    assert r.metadata["title"] == "Test Post"
-    assert r.metadata["author"] == "u/alice"
-    assert r.metadata["source_id"] == "abc"
-    assert r.metadata["date"] == "2023-11-14"  # from created_utc
-    assert "body text here" in r.content
-    assert "u/bob" in r.content and "great point" in r.content
-
-
-def test_reddit_link_post(monkeypatch):
-    a = RedditAdapter()
-    listing = [
-        {"data": {"children": [{"kind": "t3", "data": {
-            "id": "z9", "title": "Cool link", "author": "dave", "subreddit": "news",
-            "selftext": "", "url": "https://example.com/story",
-        }}]}},
-        {"data": {"children": []}},
-    ]
-    monkeypatch.setattr(a, "_fetch_json", lambda url: listing)
-    r = a.fetch("https://reddit.com/r/news/comments/z9/cool/")
-    assert "Link post: https://example.com/story" in r.content
-    assert r.metadata["date"]  # defaulted to today (no created_utc)
-
-
-def test_transcribe_available():
-    assert transcribe.available() is True  # faster-whisper installed via [whisper]/[all]
-
-
-def test_reddit_json_url():
-    assert RedditAdapter._json_url("https://reddit.com/r/x/comments/a/t/") == \
-        "https://reddit.com/r/x/comments/a/t.json"
-    assert RedditAdapter._json_url("https://reddit.com/r/x/comments/a/t?utm=1") == \
-        "https://reddit.com/r/x/comments/a/t.json"
-
-
-def test_reddit_missing_extra(monkeypatch):
-    monkeypatch.setitem(sys.modules, "curl_cffi", None)
-    with pytest.raises(QuarryError, match=r"\[reddit\] extra"):
-        RedditAdapter()._fetch_json("https://reddit.com/r/x/comments/a/t/")
-
-
-def test_reddit_oauth_routing(monkeypatch):
-    from quarry.adapters import reddit as rmod
-
-    monkeypatch.setenv("QUARRY_REDDIT_CLIENT_ID", "cid")
-    monkeypatch.setenv("QUARRY_REDDIT_CLIENT_SECRET", "sec")
-    assert rmod.oauth_configured() is True
-    a = RedditAdapter()
-    monkeypatch.setattr(a, "_fetch_via_praw", lambda url: "PRAW")
-    monkeypatch.setattr(a, "_fetch_via_json", lambda url: "JSON")
-    assert a.fetch("https://reddit.com/x") == "PRAW"
-
-
-def test_reddit_no_oauth_uses_json(monkeypatch):
-    monkeypatch.delenv("QUARRY_REDDIT_CLIENT_ID", raising=False)
-    monkeypatch.delenv("QUARRY_REDDIT_CLIENT_SECRET", raising=False)
-    a = RedditAdapter()
-    monkeypatch.setattr(a, "_fetch_via_praw", lambda url: "PRAW")
-    monkeypatch.setattr(a, "_fetch_via_json", lambda url: "JSON")
-    assert a.fetch("https://reddit.com/x") == "JSON"
-
-
-def test_reddit_bad_shape(monkeypatch):
-    a = RedditAdapter()
-    monkeypatch.setattr(a, "_fetch_json", lambda url: [{}])
-    with pytest.raises(QuarryError, match="unexpected response"):
-        a.fetch("https://reddit.com/x")
 
 
 # --- github ------------------------------------------------------------------
