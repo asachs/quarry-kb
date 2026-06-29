@@ -105,6 +105,21 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             "pip install 'quarry-kb[web]'",
             hard=False,
         )
+    if "reddit" in enabled:
+        from quarry.adapters.reddit import oauth_configured
+
+        check(
+            "reddit adapter dep (curl_cffi)",
+            _module_present("curl_cffi"),
+            "pip install 'quarry-kb[reddit]'",
+            hard=False,
+        )
+        check(
+            "reddit OAuth (reliable; else best-effort no-key)",
+            oauth_configured(),
+            "set QUARRY_REDDIT_CLIENT_ID/SECRET — see reddit adapter docs",
+            hard=False,
+        )
     _, status = discovery.check(cfg)
     check(
         f"discovery backend ({cfg.discovery.backend})",

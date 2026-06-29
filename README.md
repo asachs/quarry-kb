@@ -28,9 +28,13 @@ pip install quarry-kb               # core only (PyYAML); add adapters as extras
 ```
 
 Adapters (each an extra): `youtube` (transcript + Whisper fallback), `web`, `reddit`
-(stdlib), `github` (gitingest), `pdf` (PyMuPDF4LLM + OCR), `instagram` (best-effort),
-plus `whisper` for local audio transcription. Adapters extract raw content
-deterministically — no LLM, no API key.
+(curl_cffi; optional OAuth via `[reddit-oauth]`), `github` (gitingest), `pdf`
+(PyMuPDF4LLM + OCR), `instagram` (best-effort), plus `whisper` for local audio
+transcription. Adapters extract raw content deterministically — no LLM. The core needs
+no API key; a few adapters take *optional* credentials (Reddit OAuth, Instagram cookies)
+for reliability — see each adapter's module docstring for setup (e.g.
+`src/quarry/adapters/reddit.py` documents the 2-minute Reddit "script" app + the
+`QUARRY_REDDIT_CLIENT_ID`/`QUARRY_REDDIT_CLIENT_SECRET` env vars).
 
 > Installed as `quarry-kb` on PyPI (the bare name was taken); the command and import
 > are both `quarry`.

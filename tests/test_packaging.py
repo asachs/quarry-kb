@@ -30,7 +30,7 @@ def test_no_tomli_dependency():
 def test_extras_declared():
     """ISC-7: all five extras are declared."""
     assert set(PROJECT["optional-dependencies"]) == {
-        "youtube", "web", "reddit", "github", "pdf",
+        "youtube", "web", "reddit", "reddit-oauth", "github", "pdf",
         "instagram", "whisper", "discovery", "all", "dev",
     }
 

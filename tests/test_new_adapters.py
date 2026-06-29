@@ -104,6 +104,27 @@ def test_reddit_missing_extra(monkeypatch):
         RedditAdapter()._fetch_json("https://reddit.com/r/x/comments/a/t/")
 
 
+def test_reddit_oauth_routing(monkeypatch):
+    from quarry.adapters import reddit as rmod
+
+    monkeypatch.setenv("QUARRY_REDDIT_CLIENT_ID", "cid")
+    monkeypatch.setenv("QUARRY_REDDIT_CLIENT_SECRET", "sec")
+    assert rmod.oauth_configured() is True
+    a = RedditAdapter()
+    monkeypatch.setattr(a, "_fetch_via_praw", lambda url: "PRAW")
+    monkeypatch.setattr(a, "_fetch_via_json", lambda url: "JSON")
+    assert a.fetch("https://reddit.com/x") == "PRAW"
+
+
+def test_reddit_no_oauth_uses_json(monkeypatch):
+    monkeypatch.delenv("QUARRY_REDDIT_CLIENT_ID", raising=False)
+    monkeypatch.delenv("QUARRY_REDDIT_CLIENT_SECRET", raising=False)
+    a = RedditAdapter()
+    monkeypatch.setattr(a, "_fetch_via_praw", lambda url: "PRAW")
+    monkeypatch.setattr(a, "_fetch_via_json", lambda url: "JSON")
+    assert a.fetch("https://reddit.com/x") == "JSON"
+
+
 def test_reddit_bad_shape(monkeypatch):
     a = RedditAdapter()
     monkeypatch.setattr(a, "_fetch_json", lambda url: [{}])

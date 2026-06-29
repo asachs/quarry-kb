@@ -4,6 +4,22 @@ All notable changes to Quarry are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and Quarry adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3]
+
+### Added
+- `reddit` adapter optional **OAuth path** (PRAW, read-only client-credentials — only
+  `QUARRY_REDDIT_CLIENT_ID` + `QUARRY_REDDIT_CLIENT_SECRET`, no username/password). Used
+  automatically when both env vars are set; falls back to the no-key curl_cffi path
+  otherwise. OAuth gets Reddit's ~100 QPM authenticated budget, immune to the IP-reputation
+  throttle that hits the no-key path (which communicates no Retry-After). New
+  `[reddit-oauth]` extra; setup process documented in the adapter. `quarry doctor` reports
+  whether OAuth is configured.
+
+### Note
+- Principle refinement: the core never reads the environment and needs no keys, but
+  **adapters may use optional credentials** (reddit OAuth, instagram cookies); the no-key
+  path remains the default and the test suite still runs with zero keys.
+
 ## [0.2.2]
 
 ### Changed
