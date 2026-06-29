@@ -98,28 +98,10 @@ def test_reddit_json_url():
         "https://reddit.com/r/x/comments/a/t.json"
 
 
-def test_reddit_resolves_share_link(monkeypatch):
-    a = RedditAdapter()
-    resolved = {"n": 0}
-
-    def fake_resolve(url):
-        resolved["n"] += 1
-        return "https://www.reddit.com/r/python/comments/abc/test/"
-
-    monkeypatch.setattr(a, "_resolve", fake_resolve)
-    captured = {}
-
-    def fake_open(req, **kw):
-        captured["url"] = req.full_url
-        raise QuarryError("stop")  # we only assert the URL built after resolve
-
-    import quarry.adapters.reddit as rmod
-
-    monkeypatch.setattr(rmod.urllib.request, "urlopen", fake_open)
-    with pytest.raises(QuarryError):
-        a._fetch_json("https://www.reddit.com/r/python/s/SHORTCODE")
-    assert resolved["n"] == 1
-    assert captured["url"] == "https://www.reddit.com/r/python/comments/abc/test.json"
+def test_reddit_missing_extra(monkeypatch):
+    monkeypatch.setitem(sys.modules, "curl_cffi", None)
+    with pytest.raises(QuarryError, match=r"\[reddit\] extra"):
+        RedditAdapter()._fetch_json("https://reddit.com/r/x/comments/a/t/")
 
 
 def test_reddit_bad_shape(monkeypatch):

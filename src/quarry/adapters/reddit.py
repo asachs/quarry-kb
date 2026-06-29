@@ -1,23 +1,28 @@
 """Reddit adapter — post + comments via the public ``.json`` endpoint.
 
-Every public Reddit URL accepts a ``.json`` suffix and returns the post plus its
-comment tree, with no API key (rate-limited ~10-60/min; needs a real User-Agent).
-Stdlib-only — no extra. The network fetch lives in an overridable method so tests
-stay hermetic.
+Reddit TLS/JA3-fingerprint-blocks pure-Python HTTP (urllib/requests/httpx get 403
+where curl gets 200), so the fetch uses **curl_cffi** with ``impersonate="chrome"`` to
+present a real browser handshake. No API key; rate-limited (~best-effort) — for reliable
+high-volume use, the OAuth/PRAW path is the documented upgrade. Requires the ``[reddit]``
+extra (curl_cffi). The fetch lives in an overridable method so tests stay hermetic.
 """
 
 from __future__ import annotations
 
 import datetime as _dt
-import json
 import re
-import urllib.request
 
 from quarry.adapters.base import Adapter, FetchResult
 from quarry.errors import QuarryError
 
-_UA = "quarry-kb (+https://github.com/asachs/quarry-kb)"
 _TOP_COMMENTS = 20
+
+
+def _ua() -> str:
+    from quarry import __version__
+
+    # Reddit's required descriptive format: <platform>:<app id>:<version> (by /u/<user>)
+    return f"python:quarry-kb:{__version__} (by /u/quarry-kb)"
 
 
 class RedditAdapter(Adapter):
@@ -26,26 +31,32 @@ class RedditAdapter(Adapter):
     def matches(self, url: str) -> bool:
         return "reddit.com/" in url or "redd.it/" in url
 
-    # --- overridable network method ---------------------------------------
-    def _resolve(self, url: str) -> str:  # pragma: no cover - network
-        """Follow a /s/ share-link redirect to its canonical permalink."""
-        req = urllib.request.Request(url, headers={"User-Agent": _UA})
-        with urllib.request.urlopen(req, timeout=20) as resp:  # noqa: S310
-            return resp.url
-
     @staticmethod
     def _json_url(base: str) -> str:
         return base.split("?")[0].rstrip("/") + ".json"
 
-    def _fetch_json(self, url: str) -> list:  # pragma: no cover - network
+    # --- overridable network method (curl_cffi defeats Reddit's TLS/JA3 block) ----
+    def _fetch_json(self, url: str) -> list:  # pragma: no cover - network/extra
+        try:
+            from curl_cffi import requests as cffi
+        except ImportError as e:
+            raise QuarryError(
+                "reddit adapter needs the [reddit] extra (pip install 'quarry-kb[reddit]')"
+            ) from e
+        headers = {"User-Agent": _ua()}
         base = url.split("?")[0]
-        if "/s/" in base:  # share link -> resolve to the real permalink first
-            base = self._resolve(base)
-        req = urllib.request.Request(
-            self._json_url(base), headers={"User-Agent": _UA}
-        )
-        with urllib.request.urlopen(req, timeout=20) as resp:  # noqa: S310
-            return json.loads(resp.read().decode("utf-8", errors="replace"))
+        if "/s/" in base:  # share link -> resolve to the canonical permalink first
+            r = cffi.get(base, impersonate="chrome", headers=headers, timeout=20)
+            base = str(r.url).split("?")[0]
+        resp = cffi.get(self._json_url(base), impersonate="chrome", headers=headers, timeout=20)
+        if resp.status_code == 403:
+            raise QuarryError(
+                "reddit: HTTP 403 (rate-limited or IP-throttled). Space requests out, or "
+                "configure OAuth for reliable access."
+            )
+        if resp.status_code != 200:
+            raise QuarryError(f"reddit: HTTP {resp.status_code} for {url}")
+        return resp.json()
 
     # --- helpers ----------------------------------------------------------
     @staticmethod

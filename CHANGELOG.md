@@ -4,6 +4,15 @@ All notable changes to Quarry are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and Quarry adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2]
+
+### Changed
+- `reddit` adapter now fetches via **curl_cffi** (`impersonate="chrome"`) instead of
+  stdlib urllib — Reddit TLS/JA3-fingerprint-blocks pure-Python clients (urllib 403,
+  browser-handshake 200). Uses Reddit's required descriptive User-Agent format. `[reddit]`
+  extra is now `curl_cffi` (was stdlib-only). No-key/best-effort (rate-limited); OAuth/PRAW
+  remains the reliable upgrade. Resolves `/s/` share links via the redirect.
+
 ## [0.2.1]
 
 ### Fixed
