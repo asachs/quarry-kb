@@ -4,6 +4,12 @@ All notable changes to Quarry are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and Quarry adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1]
+
+### Fixed
+- `reddit` adapter now resolves `/s/` share links to the canonical permalink before
+  fetching `.json` (share links are redirects and don't accept a `.json` suffix directly).
+
 ## [0.2.0]
 
 ### Added

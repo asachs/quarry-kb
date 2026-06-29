@@ -27,9 +27,23 @@ class RedditAdapter(Adapter):
         return "reddit.com/" in url or "redd.it/" in url
 
     # --- overridable network method ---------------------------------------
+    def _resolve(self, url: str) -> str:  # pragma: no cover - network
+        """Follow a /s/ share-link redirect to its canonical permalink."""
+        req = urllib.request.Request(url, headers={"User-Agent": _UA})
+        with urllib.request.urlopen(req, timeout=20) as resp:  # noqa: S310
+            return resp.url
+
+    @staticmethod
+    def _json_url(base: str) -> str:
+        return base.split("?")[0].rstrip("/") + ".json"
+
     def _fetch_json(self, url: str) -> list:  # pragma: no cover - network
-        json_url = url.split("?")[0].rstrip("/") + ".json"
-        req = urllib.request.Request(json_url, headers={"User-Agent": _UA})
+        base = url.split("?")[0]
+        if "/s/" in base:  # share link -> resolve to the real permalink first
+            base = self._resolve(base)
+        req = urllib.request.Request(
+            self._json_url(base), headers={"User-Agent": _UA}
+        )
         with urllib.request.urlopen(req, timeout=20) as resp:  # noqa: S310
             return json.loads(resp.read().decode("utf-8", errors="replace"))
 

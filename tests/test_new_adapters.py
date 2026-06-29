@@ -91,6 +91,37 @@ def test_transcribe_available():
     assert transcribe.available() is True  # faster-whisper installed via [whisper]/[all]
 
 
+def test_reddit_json_url():
+    assert RedditAdapter._json_url("https://reddit.com/r/x/comments/a/t/") == \
+        "https://reddit.com/r/x/comments/a/t.json"
+    assert RedditAdapter._json_url("https://reddit.com/r/x/comments/a/t?utm=1") == \
+        "https://reddit.com/r/x/comments/a/t.json"
+
+
+def test_reddit_resolves_share_link(monkeypatch):
+    a = RedditAdapter()
+    resolved = {"n": 0}
+
+    def fake_resolve(url):
+        resolved["n"] += 1
+        return "https://www.reddit.com/r/python/comments/abc/test/"
+
+    monkeypatch.setattr(a, "_resolve", fake_resolve)
+    captured = {}
+
+    def fake_open(req, **kw):
+        captured["url"] = req.full_url
+        raise QuarryError("stop")  # we only assert the URL built after resolve
+
+    import quarry.adapters.reddit as rmod
+
+    monkeypatch.setattr(rmod.urllib.request, "urlopen", fake_open)
+    with pytest.raises(QuarryError):
+        a._fetch_json("https://www.reddit.com/r/python/s/SHORTCODE")
+    assert resolved["n"] == 1
+    assert captured["url"] == "https://www.reddit.com/r/python/comments/abc/test.json"
+
+
 def test_reddit_bad_shape(monkeypatch):
     a = RedditAdapter()
     monkeypatch.setattr(a, "_fetch_json", lambda url: [{}])
