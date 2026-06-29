@@ -1,31 +1,35 @@
-"""Reddit adapter — post + comments, with an optional OAuth path.
+"""Reddit adapter — best-effort, fighting a losing battle against Reddit's lockdown.
 
-Two fetch paths, chosen automatically:
+⚠️ **Reality check (2026): Reddit is actively hostile to programmatic access.** Both
+paths below are degraded by design on Reddit's side, and this only gets worse over time:
 
-1. **OAuth (reliable, recommended)** — if ``QUARRY_REDDIT_CLIENT_ID`` and
-   ``QUARRY_REDDIT_CLIENT_SECRET`` are set, fetch via PRAW in read-only mode. This gets
-   Reddit's authenticated budget (~100 queries/min per client id) and is not subject to
-   the opaque IP-reputation throttling that hits the no-key path. Requires the
-   ``[reddit-oauth]`` extra. **No Reddit username/password needed** — read-only uses the
-   application-only (client-credentials) grant.
+- **No-key path is throttled.** The public ``.json`` endpoint is TLS/JA3-fingerprint
+  -blocked for pure-Python clients (urllib/requests/httpx → 403; a real browser handshake
+  → 200), so we fetch via **curl_cffi** (``impersonate="chrome"``) to look like Chrome.
+  Even then it's IP-reputation rate-limited: a burst trips an opaque block that serves an
+  HTML page with **no Retry-After / no X-Ratelimit headers** — you can't pace around it or
+  know when it clears. Fine for the *occasional* link; unreliable at any volume.
+- **OAuth path is gated.** Reddit's *Responsible Builder Policy* (Nov 2025) now requires
+  **pre-approval for ALL apps, including personal/hobby scripts** — you can no longer
+  self-serve a script app at reddit.com/prefs/apps; you must apply and be approved. The
+  policy also restricts using Reddit data for AI/ML. So OAuth is not a 2-minute setup.
 
-2. **No-key (best-effort, fallback)** — the public ``.json`` endpoint via **curl_cffi**
-   (``impersonate="chrome"``). Reddit TLS/JA3-fingerprint-blocks pure-Python HTTP
-   (urllib/requests/httpx get 403; a browser handshake gets 200), and curl_cffi swaps the
-   TLS stack to match Chrome. Rate-limited and IP-reputation throttled — fine for the odd
-   link, unreliable at volume. Requires the ``[reddit]`` extra.
+**Bottom line: treat Reddit as best-effort.** It works for the odd link when the IP isn't
+throttled. For a thread that won't fetch, use the ``web`` adapter on the
+``old.reddit.com`` permalink, or just paste the text. Don't build anything that *depends*
+on reliable Reddit ingestion.
 
-## Setting up OAuth (one-time, ~2 minutes)
+## Fetch paths (chosen automatically)
 
-1. Go to https://www.reddit.com/prefs/apps  → "create another app…".
-2. Choose type **"script"**, give it any name, set redirect uri to
-   ``http://localhost:8080`` (unused for read-only). Create it.
-3. The **client id** is the string just under the app name ("personal use script");
-   the **client secret** is the ``secret`` field.
-4. Export them where Quarry runs (shell profile, container env, etc.):
-   ``export QUARRY_REDDIT_CLIENT_ID=...`` and ``export QUARRY_REDDIT_CLIENT_SECRET=...``.
-5. ``pip install 'quarry-kb[reddit-oauth]'``. Quarry uses OAuth automatically when both
-   vars are present, else falls back to the no-key path. ``quarry doctor`` shows which.
+1. **OAuth** — used iff ``QUARRY_REDDIT_CLIENT_ID`` + ``QUARRY_REDDIT_CLIENT_SECRET`` are
+   set (PRAW, read-only client-credentials grant — no username/password; ``[reddit-oauth]``
+   extra). ~100 QPM, sidesteps the IP throttle — *if* you've been granted API access.
+2. **No-key** — curl_cffi against ``.json`` (``[reddit]`` extra). The default fallback.
+
+### If you do get API access (Responsible Builder approval)
+Create a **script** app, then set ``QUARRY_REDDIT_CLIENT_ID`` / ``QUARRY_REDDIT_CLIENT_SECRET``
+in the environment where Quarry runs and ``pip install 'quarry-kb[reddit-oauth]'``. Quarry
+switches to OAuth automatically; ``quarry doctor`` shows which path is active.
 
 Network methods are overridable so the default test suite stays hermetic.
 """
