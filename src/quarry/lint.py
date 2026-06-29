@@ -120,12 +120,24 @@ def _gwords(text: str) -> list[str]:
 
 
 def _bold_named_terms(content: str) -> list[str]:
-    """`**...**` spans that contain an uppercase letter (named things, not emphasis)."""
+    """Multi-word Title-Case names in `**...**` spans — the proper-noun / build-name
+    signature, as opposed to bolded labels (``**Status:**``), emphasised sentences
+    (``**Heat exposure.**``), or single emphasised words (``**Print**``).
+
+    Filters, tuned for precision over recall (this is advisory): 2–4 words, no trailing
+    punctuation, no markdown link/bracket chars, and every non-stopword word Capitalised.
+    """
     seen: set[str] = set()
     out: list[str] = []
     for m in re.finditer(r"\*\*(.+?)\*\*", content, flags=re.DOTALL):
         term = m.group(1).strip()
-        if not any(c.isupper() for c in term) or not _gwords(term):
+        if any(ch in term for ch in "[]()\n") or term.endswith((":", ".", "!", "?", ",", ";")):
+            continue
+        words = term.split()
+        if not 2 <= len(words) <= 4:
+            continue
+        content_words = [w for w in words if w.lower() not in _GND_STOP]
+        if not content_words or not all(w[:1].isupper() for w in content_words):
             continue
         key = term.lower()
         if key not in seen:

@@ -173,3 +173,13 @@ def test_groundedness_report_section(chtmp: Path):
     assert "Ungrounded terms:" in report
     assert "UNGROUNDED TERMS" in report
     assert "Mighty Throw" in report
+
+
+def test_groundedness_ignores_labels_sentences_and_single_words(chtmp: Path):
+    """Bold used for labels / emphasis / sentences must NOT be treated as named terms."""
+    body = (
+        "**Status:** ok. **Heat exposure.** matters. **Print** the part. "
+        "**No slicer involved** here. **Pairs with [Ridley](r.md)** somehow."
+    )
+    r = lint.run(_grounded_store(chtmp, body))
+    assert r.ungrounded == []  # none are multi-word Title-Case names
