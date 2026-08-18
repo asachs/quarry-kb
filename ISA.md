@@ -23,9 +23,9 @@ A working knowledge-ingestion harness already exists as a single 728-line file (
 
 - **No LLM calls, ever.** Quarry owns the deterministic half only; writing the article is the agent's/human's job between `ingest` and `finish`. Runnable and testable without API keys is a hard line.
 - **No opinion about *your* wiki's shape.** Quarry ships generic defaults and examples — never André's content, paths, or conventions. The private knowledge repo's data stays private.
-- **No knowledge-repo migration in this effort.** Quarry is built standalone first; cutting `asachs/knowledge` over to consume it (its own `quarry.toml`, golden-lint match, `bin/kb` retirement) is a separate, later effort.
+- **No knowledge-repo migration in this effort.** Quarry is built standalone first; cutting `asachs/knowledge` over to consume it (its own `quarry.toml`, golden-lint match, `bin/kb` retirement) is a separate, later effort. **Resolved:** that effort ran — `asachs/knowledge` ships its own `quarry.toml` and `bin/kb` is deleted.
 - **No PyPI publish or GitHub remote in this effort.** The CI workflow file is written and the release job is defined, but actual publishing (trusted-publishing setup, account/token steps) is deferred to André's review — local-first. **Resolved 2026-06-28:** the remote is `github.com/asachs/quarry-kb` and trusted publishing went live with `v0.1.0`; every `v*` tag has published since (current: `0.5.1`). See ISC-92.
-- **No roadmap adapters in v1.** `pdf`, `github`, `instagram` are explicitly later; v1 ships `youtube` + `web` only.
+- **No roadmap adapters in v1.** `pdf`, `github`, `instagram` are explicitly later; v1 ships `youtube` + `web` only. **Resolved:** all three shipped post-v1 — `src/quarry/adapters/` now holds `github.py`, `instagram.py`, `pdf.py`, `web.py`, `youtube.py`.
 - **No discovery backends beyond qmd in v1.** The discovery interface is pluggable, but only the `qmd` backend is implemented now.
 - **No `quarry serve`/watch mode, no auto-index on finish, no ingest-date-vs-upload-date split.** All deferred to later.
 - **No note-taking-app features.** Quarry is a CLI harness, not an editor or UI.
@@ -138,6 +138,7 @@ Generalise `bin/kb` into **Quarry**: an installable, MIT-licensed, config-driven
 - [x] ISC-59: Each lint check is individually toggleable from `[lint]` config.
 - [x] ISC-60: Golden-output test — a fixture wiki produces a byte-locked report string.
 - [x] ISC-101: A link target is external only when it is scheme-qualified (`http://`, `https://`, `mailto:`) or an anchor — a relative link to a filename beginning `http` (e.g. `http-status-codes.md`) stays in the link graph.
+- [x] ISC-102: Groundedness matches across inflection (`webhooks` grounds `Webhook`) and reads directory sources, so plural forms and notes-export folders don't produce false flags.
 
 ### Discovery (optional, pluggable)
 
@@ -493,6 +494,7 @@ Generalise `bin/kb` into **Quarry**: an installable, MIT-licensed, config-driven
 - ISC-59: `test_broken_check_toggleable` / `test_sources_check_toggleable`.
 - ISC-60: `test_golden_report` — byte-locked report vs `fixtures/lint_report.golden.txt`.
 - ISC-101: `test_http_prefixed_filename_is_a_local_link` / `test_real_external_urls_are_still_skipped` — `_body_links` matched a bare `"http"` prefix, so any relative link to `http-*.md` was dropped as an external URL and its target was a permanent false orphan.
+- ISC-102: `test_groundedness_matches_across_inflection` / `test_groundedness_reads_directory_sources` — exact word matching flagged `**Webhook Verification**` against a source reading "verifying webhooks", and skipped cited directories entirely.
 
 ### Checkpoint 6 — CliAndDoctor + CI + DocsAndHygiene (2026-06-28, py3.11.15)
 

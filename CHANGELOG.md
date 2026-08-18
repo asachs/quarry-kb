@@ -4,6 +4,16 @@ All notable changes to Quarry are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and Quarry adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.2]
+
+### Changed
+- **Groundedness is no longer defeated by plurals or directory sources.** The check compared
+  raw lowercased words, so `**Webhook Verification**` was flagged against a source that said
+  "verifying webhooks", and a cited directory (a notes export, a scan bundle) contributed no
+  words at all. Terms and source text are now lightly stemmed before comparison, and a cited
+  directory's `.md`/`.txt` files are read (bounded at 500 files). Real fabrications are still
+  caught; the false-positive rate drops.
+
 ## [0.5.1]
 
 ### Fixed

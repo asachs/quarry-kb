@@ -112,10 +112,22 @@ _GND_STOP = frozenset(
 )
 
 
+def _stem(w: str) -> str:
+    """Crude suffix strip so `webhooks`/`verifying` match `webhook`/`verification`.
+
+    Deliberately not a real stemmer: this check is advisory and over-matching costs
+    a missed flag, while under-matching costs a false accusation of ungroundedness.
+    """
+    for suf, keep in (("ies", "y"), ("ing", ""), ("ed", ""), ("es", ""), ("s", "")):
+        if w.endswith(suf) and len(w) - len(suf) >= 3:
+            return w[: -len(suf)] + keep
+    return w
+
+
 def _gwords(text: str) -> list[str]:
-    """Lowercased content words (>2 chars, non-stopword) from arbitrary text."""
+    """Lowercased, stemmed content words (>2 chars, non-stopword) from arbitrary text."""
     return [
-        w
+        _stem(w)
         for w in re.sub(r"[^a-z0-9]+", " ", text.lower()).split()
         if len(w) > 2 and w not in _GND_STOP
     ]
@@ -148,16 +160,30 @@ def _bold_named_terms(content: str) -> list[str]:
     return out
 
 
+# A cited source may be a whole directory (a notes export, a scan bundle). Read its
+# text files too, bounded so one huge directory can't dominate a lint run.
+_GND_DIR_FILE_CAP = 500
+
+
+def _source_text_files(p: Path) -> list[Path]:
+    """The readable text files a cited source resolves to — itself, or its contents."""
+    if p.is_file():
+        return [p] if p.suffix.lower() in {".md", ".txt"} else []
+    if p.is_dir():
+        found = sorted(f for f in p.rglob("*") if f.suffix.lower() in {".md", ".txt"})
+        return found[:_GND_DIR_FILE_CAP]
+    return []
+
+
 def _source_words(path: Path, cfg: Config) -> set[str]:
-    """Content words from every readable, local, text (.md/.txt) cited source."""
+    """Content words from every readable, local, text cited source (file or directory)."""
     hay: set[str] = set()
     for s in _sources(path, cfg.frontmatter.sources_field):
         if not _is_local_source(s):
             continue
-        p = cfg.root / s
-        if p.suffix.lower() in {".md", ".txt"} and p.is_file():
+        for f in _source_text_files(cfg.root / s):
             try:
-                hay.update(_gwords(p.read_text(encoding="utf-8")))
+                hay.update(_gwords(f.read_text(encoding="utf-8")))
             except (OSError, UnicodeDecodeError):
                 continue
     return hay

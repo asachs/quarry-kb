@@ -1,4 +1,4 @@
-"""Tests for lint — ISC-49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 101."""
+"""Tests for lint — ISC-49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 101, 102."""
 
 from pathlib import Path
 
@@ -187,6 +187,36 @@ def test_groundedness_skips_when_no_text_source(chtmp: Path):
     """No readable text source (e.g. only a PDF) -> can't verify, don't flag."""
     r = lint.run(_grounded_store(chtmp, "**Mighty Throw** rules.", sources="  - raw/scan.pdf"))
     assert r.ungrounded == []
+
+
+# --- ISC-102: inflection and directory sources ------------------------------
+
+
+def test_groundedness_matches_across_inflection(chtmp: Path):
+    """`Firewall Builds` is grounded by a source saying "firewall ... builds look strong"."""
+    body = "**Firewall Build** matters. **Ancient Summoners** too. **Mighty Throw** does not."
+    r = lint.run(_grounded_store(chtmp, body))
+    flagged = [t for _, t in r.ungrounded]
+    assert "Firewall Build" not in flagged
+    assert "Ancient Summoners" not in flagged  # source has "ancient summoner"
+    assert "Mighty Throw" in flagged  # genuinely absent — still caught
+
+
+def test_groundedness_reads_directory_sources(chtmp: Path):
+    """A cited directory contributes the words of the text files inside it."""
+    (chtmp / "quarry.toml").write_text("[lint]\ngroundedness = true\n")
+    c = config.load(chtmp)
+    _w(c.root / "raw" / "notes" / "a.md", "The Pelican Signet was handed over.\n")
+    _w(c.root / "raw" / "notes" / "b.txt", "Mighty Throw appears here.\n")
+    _w(
+        c.root / "wiki" / "g.md",
+        "---\ntitle: G\nsources:\n  - raw/notes/\n---\n\n"
+        "**Signet of the Pelican** and **Mighty Throw** and **Absent Relic**.\n",
+    )
+    flagged = [t for _, t in lint.run(c).ungrounded]
+    assert "Signet of the Pelican" not in flagged
+    assert "Mighty Throw" not in flagged
+    assert "Absent Relic" in flagged
 
 
 def test_groundedness_gateable_via_fail_on(chtmp: Path):
