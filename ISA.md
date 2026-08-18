@@ -184,7 +184,7 @@ Generalise `bin/kb` into **Quarry**: an installable, MIT-licensed, config-driven
 - [x] ISC-89: `.github/workflows/ci.yml` exists with a py3.11/3.12/3.13 matrix.
 - [x] ISC-90: CI runs `ruff check` and `pytest --cov`, failing the build under 90% coverage.
 - [x] ISC-91: Integration (network) tests are gated to a manual/nightly workflow, not the default CI run.
-- [x] ISC-92: A tagged-release PyPI trusted-publishing job is defined in CI but not wired to fire (publish deferred).
+- [x] ISC-92: A `v*` tag publishes to PyPI via trusted publishing, gated behind the full test matrix (`needs: test`).
 
 ### Docs & public hygiene
 
@@ -506,11 +506,11 @@ Generalise `bin/kb` into **Quarry**: an installable, MIT-licensed, config-driven
 - ISC-84/-85/-86: suite green, coverage 93% ≥ 90, ruff clean (this run).
 - ISC-87: `test_pipeline_under_config_variants` — 3 distinct `quarry.toml` (layout/schema/discovery) through ingest→finish.
 - ISC-88/-100: `test_suite_is_hermetic_qmd_neutralized`, `test_no_api_key_or_env_access`, `test_runs_with_no_api_keys`.
-- ISC-89/-90/-91/-92: `.github/workflows/ci.yml` — py3.11–3.13 matrix runs ruff + `pytest`/`coverage --fail-under=90`; integration gated to `workflow_dispatch`/`schedule`; release job fires only on a `v*` tag (publish deferred). *Authored to the locally-verified gate; first remote run pending the deferred GitHub remote.*
+- ISC-89/-90/-91/-92: `.github/workflows/ci.yml` — py3.11–3.13 matrix runs ruff + `pytest`/`coverage --fail-under=90`; integration gated to `workflow_dispatch`/`schedule`; release job fires on a `v*` tag. *Publishing is live: `v0.5.1` ran the matrix green and the `release` job published in 31s; confirmed against the PyPI API (`quarry-kb` latest `0.5.1`, wheel + sdist present), not the workflow's own status.*
 - ISC-93/-94/-95: README (what/why + quickstart + config reference + adapter guide), `examples/quarry.toml` == `DEFAULT_TOML` (`test_examples_..._matches_init_default`), CHANGELOG + CONTRIBUTING.
 - ISC-96/-97/-98/-99: `test_no_llm_sdk_imports`, `test_no_personal_data`, `test_core_modules_have_no_hardcoded_conventions`, `test_core_flows_work_without_optional_extras`.
 
-**All 100 ISCs verified. Build complete.** Two items remain out of scope by decision: the knowledge-repo migration (§15) and the GitHub/PyPI publish — both deferred to a later effort.
+**All 100 ISCs verified. Build complete.** The GitHub remote and PyPI publish, deferred at build time, are now live (first published release `v0.1.0`; current `v0.5.1`). The knowledge-repo migration (§15) remained a separate effort.
 
 <!--
 Quarry project ISA, E4, all twelve sections. Generalises the private bin/kb (728 lines) into a public, config-driven, tested package. 100 ISCs across packaging, config/init, store, manifest seam, ingest, finish/provenance, lint, discovery, adapters/plugins, CLI, testing gates, CI, docs/hygiene. Anti-criteria (ISC-96..100) cover the load-bearing invariants: no LLM, no personal data, no hardcoded conventions, graceful optional-dep degrade, no-keys/no-network testability. No antecedents — the goal is verifiable (build/test/install/lint), not experiential. ISC count under the E4 floor is justified in Decisions. Changelog + Verification intentionally empty at OBSERVE per the empty-section rule.
