@@ -139,6 +139,7 @@ Generalise `bin/kb` into **Quarry**: an installable, MIT-licensed, config-driven
 - [x] ISC-60: Golden-output test — a fixture wiki produces a byte-locked report string.
 - [x] ISC-101: A link target is external only when it is scheme-qualified (`http://`, `https://`, `mailto:`) or an anchor — a relative link to a filename beginning `http` (e.g. `http-status-codes.md`) stays in the link graph.
 - [x] ISC-102: Groundedness matches across inflection (`webhooks` grounds `Webhook`) and reads directory sources, so plural forms and notes-export folders don't produce false flags.
+- [x] ISC-103: `lint` flags dated raw captures left loose in the raw root when `[store] raw_layout` nests them; toggleable via `[lint] raw_layout`, silent on a flat layout.
 
 ### Discovery (optional, pluggable)
 
@@ -495,6 +496,7 @@ Generalise `bin/kb` into **Quarry**: an installable, MIT-licensed, config-driven
 - ISC-60: `test_golden_report` — byte-locked report vs `fixtures/lint_report.golden.txt`.
 - ISC-101: `test_http_prefixed_filename_is_a_local_link` / `test_real_external_urls_are_still_skipped` — `_body_links` matched a bare `"http"` prefix, so any relative link to `http-*.md` was dropped as an external URL and its target was a permanent false orphan.
 - ISC-102: `test_groundedness_matches_across_inflection` / `test_groundedness_reads_directory_sources` — exact word matching flagged `**Webhook Verification**` against a source reading "verifying webhooks", and skipped cited directories entirely.
+- ISC-103: `test_misfiled_raw_detects_loose_dated_captures` / `test_misfiled_raw_silent_on_flat_layout` / `test_misfiled_raw_toggleable` — layout drift was previously invisible: a store could accumulate hundreds of misfiled captures with a fully green lint.
 
 ### Checkpoint 6 — CliAndDoctor + CI + DocsAndHygiene (2026-06-28, py3.11.15)
 

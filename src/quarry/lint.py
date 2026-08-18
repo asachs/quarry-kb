@@ -23,6 +23,7 @@ _CHECK_ATTR = {
     "missing_sources": "missing",
     "orphans": "orphans",
     "not_indexed": "not_indexed",
+    "raw_layout": "misfiled_raw",
     "groundedness": "ungrounded",
 }
 
@@ -34,6 +35,7 @@ class LintResult:
     orphans: list[str] = field(default_factory=list)
     no_outgoing: list[str] = field(default_factory=list)
     not_indexed: list[str] = field(default_factory=list)
+    misfiled_raw: list[str] = field(default_factory=list)
     ungrounded: list[tuple[str, str]] = field(default_factory=list)
     total_articles: int = 0
     total_links: int = 0
@@ -189,6 +191,28 @@ def _source_words(path: Path, cfg: Config) -> set[str]:
     return hay
 
 
+
+_DATED_RAW = re.compile(r"^\d{4}-\d{2}-\d{2}[_-]")
+
+
+def _misfiled_raw(cfg: Config) -> list[str]:
+    """Dated raw captures sitting loose in raw/ when ``raw_layout`` nests them.
+
+    Narrow by design: only the root is checked, because a store may legitimately keep
+    dated files under a named category folder that the layout template can't express.
+    """
+    if "/" not in cfg.store.raw_layout:  # a flat layout — loose files are correct
+        return []
+    root = cfg.root / cfg.store.raw
+    if not root.is_dir():
+        return []
+    return sorted(
+        f"{cfg.store.raw}/{p.name}"
+        for p in root.iterdir()
+        if p.is_file() and _DATED_RAW.match(p.name)
+    )
+
+
 # ---------------------------------------------------------------------------
 # run
 # ---------------------------------------------------------------------------
@@ -245,6 +269,8 @@ def run(cfg: Config) -> LintResult:
                 if not any(w in hay for w in _gwords(term)):
                     ungrounded.append((a, term))
 
+    misfiled_raw = _misfiled_raw(cfg) if cfg.lint.raw_layout else []
+
     not_indexed: list[str] = []
     if index:
         indexed: set[str] = set()
@@ -259,6 +285,7 @@ def run(cfg: Config) -> LintResult:
         wiki, articles, incoming, outgoing, broken, missing,
         sorted(orphans), no_outgoing, not_indexed, total_links,
         sorted(ungrounded) if cfg.lint.groundedness else None,
+        misfiled_raw,
     )
     return LintResult(
         broken=sorted(broken),
@@ -267,6 +294,7 @@ def run(cfg: Config) -> LintResult:
         no_outgoing=sorted(no_outgoing),
         not_indexed=sorted(not_indexed),
         ungrounded=sorted(ungrounded),
+        misfiled_raw=misfiled_raw,
         total_articles=len(articles),
         total_links=total_links,
         report=report,
@@ -275,7 +303,7 @@ def run(cfg: Config) -> LintResult:
 
 def _format(
     wiki, articles, incoming, outgoing, broken, missing,
-    orphans, no_outgoing, not_indexed, total_links, ungrounded=None,
+    orphans, no_outgoing, not_indexed, total_links, ungrounded=None, misfiled_raw=(),
 ) -> str:
     n = len(articles)
     avg = total_links / n if n else 0
@@ -305,7 +333,14 @@ def _format(
     e(f"Missing source files:  {len(missing)}")
     if ungrounded is not None:
         e(f"Ungrounded terms:      {len(ungrounded)}")
+    if misfiled_raw:
+        e(f"Misfiled raw files:    {len(misfiled_raw)}")
     e("")
+    if misfiled_raw:
+        e("--- MISFILED RAW (dated captures loose in the raw root) ---")
+        for r in misfiled_raw:
+            e(f"  {r}")
+        e("")
     if ungrounded:
         e("--- UNGROUNDED TERMS (bolded names not traceable to cited sources) ---")
         for a, term in ungrounded:

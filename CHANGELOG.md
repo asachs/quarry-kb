@@ -4,6 +4,16 @@ All notable changes to Quarry are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and Quarry adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.3]
+
+### Added
+- **`lint` now flags dated raw captures left loose in the raw root.** `[store] raw_layout`
+  declares where raw material belongs, but nothing checked that it went there, so a store
+  could drift to hundreds of misfiled captures with a clean lint. The check is narrow by
+  design — only the root is inspected, since a store may legitimately keep dated files under
+  a named category folder the template can't express — and it stays silent on a flat layout.
+  Toggle with `[lint] raw_layout` (default on); add `"raw_layout"` to `fail_on` to gate on it.
+
 ## [0.5.2]
 
 ### Changed

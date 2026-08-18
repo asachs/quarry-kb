@@ -1,4 +1,4 @@
-"""Tests for lint — ISC-49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 101, 102."""
+"""Tests for lint — ISC-49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 101, 102, 103."""
 
 from pathlib import Path
 
@@ -54,6 +54,38 @@ def test_orphans_are_body_inbound_only(cfg):
     # a's `related: [b.md]` must NOT save b from being an orphan
     assert "b.md" in r.orphans
     assert "a.md" in r.orphans
+
+
+# --- ISC-103: dated raw captures must follow [store] raw_layout -------------
+
+
+def test_misfiled_raw_detects_loose_dated_captures(cfg):
+    """A dated capture in the raw root is flagged when the layout nests by year/month."""
+    _w(cfg.root / "raw" / "2026-08-18_loose-capture.md", "x\n")
+    _w(cfg.root / "raw" / "2026" / "08" / "2026-08-18_filed.md", "x\n")
+    _w(cfg.root / "raw" / "notebooklm-undated.md", "x\n")
+    _w(cfg.root / "raw" / "apple-notes" / "Some Note.md", "x\n")
+    _w(cfg.root / "wiki" / "a.md", "---\ntitle: A\n---\n\nbody\n")
+    r = lint.run(cfg)
+    assert r.misfiled_raw == ["raw/2026-08-18_loose-capture.md"]
+    assert "--- MISFILED RAW" in r.report
+
+
+def test_misfiled_raw_silent_on_flat_layout(chtmp: Path):
+    """A flat raw_layout means loose files are correct — nothing to flag."""
+    (chtmp / "quarry.toml").write_text('[store]\nraw_layout = "{slug}.{ext}"\n')
+    c = config.load(chtmp)
+    _w(c.root / "raw" / "2026-08-18_loose-capture.md", "x\n")
+    _w(c.root / "wiki" / "a.md", "---\ntitle: A\n---\n\nbody\n")
+    assert lint.run(c).misfiled_raw == []
+
+
+def test_misfiled_raw_toggleable(chtmp: Path):
+    (chtmp / "quarry.toml").write_text("[lint]\nraw_layout = false\n")
+    c = config.load(chtmp)
+    _w(c.root / "raw" / "2026-08-18_loose-capture.md", "x\n")
+    _w(c.root / "wiki" / "a.md", "---\ntitle: A\n---\n\nbody\n")
+    assert lint.run(c).misfiled_raw == []
 
 
 # --- ISC-101: only scheme-qualified targets are treated as external ----------
