@@ -1,4 +1,4 @@
-"""Tests for lint — ISC-49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60."""
+"""Tests for lint — ISC-49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 101."""
 
 from pathlib import Path
 
@@ -54,6 +54,34 @@ def test_orphans_are_body_inbound_only(cfg):
     # a's `related: [b.md]` must NOT save b from being an orphan
     assert "b.md" in r.orphans
     assert "a.md" in r.orphans
+
+
+# --- ISC-101: only scheme-qualified targets are treated as external ----------
+
+
+def test_http_prefixed_filename_is_a_local_link(cfg):
+    """A relative link to `http-status-codes.md` is local, not an external URL."""
+    wiki = cfg.root / "wiki"
+    _w(wiki / "web.md", "---\ntitle: Web\n---\n\nsee [Codes](http-status-codes.md)\n")
+    _w(wiki / "http-status-codes.md", "---\ntitle: Codes\n---\n\nbody\n")
+    r = lint.run(cfg)
+    assert "http-status-codes.md" not in r.orphans
+    assert "web.md" not in r.no_outgoing
+    assert r.broken == []
+
+
+def test_real_external_urls_are_still_skipped(cfg):
+    """http://, https://, mailto: and anchors stay out of the link graph."""
+    wiki = cfg.root / "wiki"
+    body = (
+        "---\ntitle: A\n---\n\n"
+        "[x](https://example.com/a.md) [y](http://example.com/b.md) "
+        "[z](mailto:a@example.com) [w](#section)\n"
+    )
+    _w(wiki / "a.md", body)
+    r = lint.run(cfg)
+    assert r.broken == []
+    assert "a.md" in r.no_outgoing
 
 
 # --- ISC-56: index_file = "" disables the not-in-index check -----------------

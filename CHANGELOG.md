@@ -4,6 +4,16 @@ All notable changes to Quarry are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and Quarry adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1]
+
+### Fixed
+- **`lint` treated any link target starting with `http` as an external URL.** `_body_links`
+  tested `target.startswith("http")`, so a relative link to a file whose name begins with
+  `http` — `http-status-codes.md` being the obvious one — was discarded before resolution.
+  The target could never accumulate inbound links and was reported as an orphan no matter how
+  many articles linked to it, while the linking articles lost an outgoing edge. The test is
+  now scheme-qualified (`http://`, `https://`), matching `_is_local_source` in the same module.
+
 ## [0.5.0]
 
 ### Added

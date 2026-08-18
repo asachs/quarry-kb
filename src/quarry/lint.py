@@ -63,7 +63,9 @@ def _body_links(content: str, rel: str) -> set[str]:
     links: set[str] = set()
     for m in re.finditer(r"\[([^\]]*)\]\(([^)]+)\)", content):
         target = m.group(2)
-        if target.startswith(("http", "#", "mailto:")):
+        # Scheme-qualified, not a bare "http" prefix: a relative link to a file whose
+        # name starts with "http" (e.g. `http-status-codes.md`) is a local target.
+        if target.startswith(("http://", "https://", "#", "mailto:")):
             continue
         target = target.split("#")[0]
         if not target.endswith(".md"):
