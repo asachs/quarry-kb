@@ -81,10 +81,17 @@ writes a fully-commented default. Tables:
 | | `root` | explicit store root (defaults to the dir containing `quarry.toml`) |
 | `[frontmatter]` | `required`, `sources_field`, `related_field` | article frontmatter schema |
 | `[ingest]` | `default_ext`, `slug`, `on_duplicate` | slug template; `on_duplicate` = `refuse \| warn \| allow` |
+| | `related_candidates` | print N link candidates (existing articles) in the compile-spec |
+| | `assets_layout` | where adapter media (frames, slides) is stored under `raw/` |
 | `[adapters]` | `enabled` | allowlist of adapters to run |
 | `[discovery]` | `backend`, `mode`, `collection`, `dedup_threshold`, `densify_topk` | semantic-link backend (`qmd` or `none`) |
+| | `search`, `refresh` | qmd mode (`query` \| `search` (BM25, instant) \| `vsearch`); `qmd update` before ingest lookups |
 | `[lint]` | `broken_links`, `require_sources_on_disk`, `orphan_check`, `index_file`, `fail_on` | which checks run and which fail the build |
 | `[finish]` | `run_lint`, `auto_push`, `commit_template` | finish behaviour |
+| | `stage` | `scoped` (default: only this ingest's raw, assets, article, index and files linking to it) \| `all` |
+| | `auto_index` | add the article to `index_file` under the heading that holds its folder's entries |
+| `[youtube]` | `comments`, `top_comments` | capture pinned + top comments into the raw |
+| `[instagram]` | `media`, `keep_video`, `frame_interval`, `max_frames`, `ocr` | save carousel slides / reel frames next to the raw and OCR them (tesseract) |
 
 See [`examples/quarry.toml`](examples/quarry.toml) for the annotated default.
 

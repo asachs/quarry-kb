@@ -47,6 +47,8 @@ def build(
     target_wiki_path: str | None,
     required_frontmatter: list[str],
     metadata: dict,
+    assets: list[str] | None = None,
+    related_candidates: list[dict] | None = None,
 ) -> dict:
     """Assemble a manifest. ``content_sha256`` is computed from ``content``; the
     raw file's own relpath is what the article ``must_cite_source``."""
@@ -60,6 +62,8 @@ def build(
         "required_frontmatter": list(required_frontmatter),
         "must_cite_source": raw_path,
         "metadata": metadata,
+        "assets": list(assets or []),
+        "related_candidates": list(related_candidates or []),
     }
 
 

@@ -225,7 +225,7 @@ Every hardcoded convention (`"wiki"`, `"raw"`, `raw/YYYY/MM`, `["title","updated
 ## 16. v1 scope vs later
 
 - **v1**: core pipeline (ingest/finish/manifest/lint), `youtube` + `web` adapters, qmd discovery (related/densify/dedup), config + `init`, full test suite + CI, PyPI publish, docs.
-- **Later**: `pdf`/`github`/`instagram` adapters; pluggable discovery backends beyond qmd; `finish` auto-index; ingest-date vs source-upload-date; richer config validation; a `quarry serve`/watch mode.
+- **Later**: pluggable discovery backends beyond qmd; richer config validation; a `quarry serve`/watch mode.
 
 ## Bootstrap decisions (resolved 2026-06-28)
 

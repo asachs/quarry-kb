@@ -44,5 +44,50 @@ def commit(root: Path, message: str) -> None:
     _run(["commit", "-m", message], root, "commit")
 
 
+def changed_paths(root: Path) -> list[str]:
+    """Modified, added and untracked files (root-relative), from ``git status``."""
+    r = subprocess.run(
+        ["git", "status", "--porcelain", "-z", "--untracked-files=all"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+    )
+    out: list[str] = []
+    entries = r.stdout.split("\0")
+    i = 0
+    while i < len(entries):
+        e = entries[i]
+        i += 1
+        if len(e) < 4:
+            continue
+        status, path = e[:2], e[3:]
+        if "R" in status or "C" in status:
+            i += 1  # a rename/copy is followed by its source path
+        if "D" in status:
+            continue
+        out.append(path)
+    return out
+
+
+def commit_paths(root: Path, paths: list[str], message: str) -> bool:
+    """Stage and commit ONLY ``paths`` (others' staged work is left alone).
+
+    Returns False when none of the paths has changes (nothing to commit).
+    """
+    if not paths:
+        return False
+    _run(["add", "--", *paths], root, "add")
+    staged = subprocess.run(
+        ["git", "diff", "--cached", "--name-only", "--", *paths],
+        cwd=root,
+        capture_output=True,
+        text=True,
+    ).stdout.split()
+    if not staged:
+        return False
+    _run(["commit", "-m", message, "--", *paths], root, "commit")
+    return True
+
+
 def push(root: Path) -> None:
     _run(["push"], root, "push")
