@@ -8,7 +8,10 @@ and ``finish``. A dedup pre-check (via discovery) guards against silent re-inges
 from __future__ import annotations
 
 import datetime as _dt
+import os
+import shutil
 import sys
+from pathlib import Path
 
 from quarry import discovery, manifest, store
 from quarry.adapters import registry
@@ -43,10 +46,42 @@ def _dedup_precheck(cfg: Config, title: str) -> None:
     )
 
 
+def _copy_assets(cfg: Config, assets: dict[str, str], dest: Path) -> list[str]:
+    """Copy adapter assets into the store; return their root-relative paths (sorted)."""
+    if not assets:
+        return []
+    dest.mkdir(parents=True, exist_ok=True)
+    out = []
+    for name, src in sorted(assets.items()):
+        target = dest / Path(name).name
+        shutil.copyfile(src, target)
+        out.append(target.relative_to(cfg.root).as_posix())
+    return out
+
+
+def _media_section(raw_abs: Path, cfg: Config, asset_paths: list[str]) -> str:
+    """A '## Media' list with links relative to the raw file, so it renders in place."""
+    lines = ["## Media", ""]
+    for rel in asset_paths:
+        link = os.path.relpath(cfg.root / rel, start=raw_abs.parent)
+        lines.append(f"- [{Path(rel).name}]({Path(link).as_posix()})")
+    return "\n".join(lines) + "\n"
+
+
 def run(cfg: Config, url: str, *, topic: str | None = None, force: bool = False) -> dict:
     """Fetch a source into raw/ + a compile-manifest. Returns the manifest + paths."""
     adapter = registry.resolve_adapter(cfg, url)
     result = registry.fetch(adapter, url)
+    try:
+        return _store_result(cfg, adapter.name, result, topic=topic, force=force)
+    finally:
+        if result.tmpdir:
+            shutil.rmtree(result.tmpdir, ignore_errors=True)
+
+
+def _store_result(
+    cfg: Config, adapter_name: str, result, *, topic: str | None, force: bool
+) -> dict:
     meta = result.metadata
     content = result.content
 
@@ -65,7 +100,15 @@ def run(cfg: Config, url: str, *, topic: str | None = None, force: bool = False)
         raise QuarryError(f"raw already exists: {raw_rel} (use --force to overwrite)")
 
     raw_abs.parent.mkdir(parents=True, exist_ok=True)
-    raw_abs.write_text(_raw_frontmatter(meta) + content + "\n", encoding="utf-8")
+    assets_dir = store.make_assets_dir(
+        cfg, title=meta["title"], date=date, slug=slug, topic=topic, source_id=source_id
+    )
+    asset_paths = _copy_assets(cfg, result.assets, assets_dir)
+    body = content
+    if asset_paths:
+        body = content.rstrip("\n") + "\n\n" + _media_section(raw_abs, cfg, asset_paths)
+    raw_abs.write_text(_raw_frontmatter(meta) + body + "\n", encoding="utf-8")
+    candidates = discovery.ingest_candidates(cfg, meta["title"], content)
 
     target_wiki = (
         f"{cfg.store.wiki}/{topic}/{store.slugify(meta['title'])}.md" if topic else None
@@ -73,12 +116,14 @@ def run(cfg: Config, url: str, *, topic: str | None = None, force: bool = False)
     m = manifest.build(
         slug=slug,
         source_url=meta["url"],
-        adapter=adapter.name,
+        adapter=adapter_name,
         raw_path=raw_rel,
         content=content,
         target_wiki_path=target_wiki,
         required_frontmatter=cfg.frontmatter.required,
         metadata=meta,
+        assets=asset_paths,
+        related_candidates=candidates,
     )
     manifest.write(cfg, slug, m)
     return {"slug": slug, "raw_path": raw_rel, "target_wiki_path": target_wiki, "manifest": m}

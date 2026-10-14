@@ -4,6 +4,54 @@ All notable changes to Quarry are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and Quarry adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0]
+
+Driven by measuring an agent's ingests: across 143 Instagram/web ingest turns, 47% of
+tool calls went on extracting media by hand (browser walks, yt-dlp/ffmpeg/tesseract,
+image reads) and 25% on finding link targets and editing the index. Quarry now does the
+deterministic parts of both, so the agent's work is mostly the article itself.
+
+### Added
+- **Instagram carousels ingest instead of failing.** Image-only `/p/` posts made yt-dlp
+  stop with "No video formats found". The adapter now passes `ignore_no_formats_error`
+  and reads each slide's image URL, so carousels ingest like reels.
+- **Instagram media capture (`[instagram] media = true`, opt-in).** Carousel slides and
+  reel frames (every `frame_interval` s, capped at `max_frames`) are saved next to the raw,
+  OCR'd with tesseract (`ocr`), and listed in a `## Media` section; consecutive frames
+  with the same text are collapsed so the OCR reads like a transcript of the on-screen
+  text. The audio transcript is taken from the downloaded video (no second download).
+  `keep_video` also keeps the video file (off by default: often 5–20 MB). Quarry still
+  never calls a model — describing images stays with the agent, which now only needs to
+  look where OCR falls short.
+- **Adapter assets.** `FetchResult` gains `assets` (name → local file) and `tmpdir`;
+  `ingest` copies assets per `[ingest] assets_layout` (default `{year}/{month}/{slug}`
+  under `raw/`), records them in the manifest, and always removes the adapter's scratch
+  directory (also when ingest refuses a duplicate or an existing raw).
+- **Link candidates in the compile-spec (`[ingest] related_candidates = N`).** Existing
+  articles worth linking are printed with their titles and stored in the manifest. With
+  `[discovery] search = "search"` (BM25) a few distinctive keywords are queried one at a
+  time and scores summed, requiring two shared keywords when three or more were used;
+  the index file is never suggested.
+- **`[discovery] search`** picks the qmd mode: `query` (hybrid + rerank, previous
+  behaviour), `search` (BM25, instant) or `vsearch`. **`[discovery] refresh`** runs
+  `qmd update` before ingest-time lookups so recent articles are found.
+- **`[finish] auto_index`** adds a missing index entry, placed under the heading whose
+  entries share the article's wiki folder (appended at the end otherwise); a `summary` or
+  `description` frontmatter field becomes the entry's blurb.
+- **`finish` finds the article by its source citation** when it isn't at the suggested
+  path, so writing it under a shorter name no longer needs a manifest edit (several
+  citing articles → an error asking for `--article`).
+- **Instagram posts carry their own date** (`upload_date`/`timestamp`) instead of the
+  ingest day, so raw paths and slugs date correctly.
+
+### Changed
+- **`finish` commits only this ingest's files by default (`[finish] stage = "scoped"`).**
+  Previously it ran `git add -A`, sweeping any other uncommitted work (another ingest in
+  progress, unrelated edits) into the commit. Scoped staging takes the raw, its assets,
+  the article, sources it cites, the index, and changed wiki files that link to the
+  article. `stage = "all"` restores the old behaviour. When nothing in scope changed,
+  `finish` reports it instead of failing on an empty commit.
+
 ## [0.5.3]
 
 ### Added

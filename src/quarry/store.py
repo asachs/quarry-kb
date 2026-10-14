@@ -126,6 +126,22 @@ def make_raw_path(
     return raw_dir(cfg) / rel
 
 
+def make_assets_dir(
+    cfg: Config,
+    *,
+    title: str,
+    date: _dt.date,
+    slug: str,
+    topic: str | None = None,
+    source_id: str | None = None,
+) -> Path:
+    """Absolute directory for an ingest's media assets, per ``[ingest] assets_layout``."""
+    tokens = _base_tokens(date, title, cfg.ingest.default_ext, topic, source_id)
+    tokens["slug"] = slug
+    rel = _render(cfg.ingest.assets_layout, tokens, "[ingest] assets_layout")
+    return raw_dir(cfg) / rel
+
+
 def raw_relpath(cfg: Config, raw_abs: Path) -> str:
     """The raw path relative to the store root (as stored in the manifest)."""
     return raw_abs.relative_to(cfg.root).as_posix()

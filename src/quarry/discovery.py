@@ -76,14 +76,18 @@ class NoneBackend:
     def available(self) -> bool:
         return False
 
+    def refresh(self, cwd: Path | None = None) -> None:
+        return None
+
     def query(self, text: str, cwd: Path | None = None) -> list[tuple[int, str]]:
         return []
 
 
 class QmdBackend:
-    def __init__(self, qmd_path: str | None, collection: str = "wiki"):
+    def __init__(self, qmd_path: str | None, collection: str = "wiki", search: str = "query"):
         self._qmd = qmd_path
         self._collection = collection
+        self.search = search  # qmd subcommand: query | search (BM25) | vsearch
 
     def available(self) -> bool:
         return self._qmd is not None
@@ -91,13 +95,18 @@ class QmdBackend:
     def query(self, text: str, cwd: Path | None = None) -> list[tuple[int, str]]:
         if not self._qmd:
             return []
-        return parse_qmd_hits(_run_qmd(self._qmd, "query", text, cwd), self._collection)
+        return parse_qmd_hits(_run_qmd(self._qmd, self.search, text, cwd), self._collection)
+
+    def refresh(self, cwd: Path | None = None) -> None:
+        """Re-index the collection (`qmd update`) so just-written articles are searchable."""
+        if self._qmd:
+            subprocess.run([self._qmd, "update"], cwd=cwd, capture_output=True, text=True)
 
 
 def get_backend(cfg: Config):
     if cfg.discovery.backend == "none" or cfg.discovery.mode == "off":
         return NoneBackend()
-    return QmdBackend(find_qmd(), cfg.discovery.collection)
+    return QmdBackend(find_qmd(), cfg.discovery.collection, cfg.discovery.search)
 
 
 def check(cfg: Config) -> tuple[object, str]:
@@ -153,6 +162,78 @@ def dedup_hits(cfg: Config, title: str) -> list[tuple[int, str]]:
     return [
         (s, p) for s, p in backend.query(title, cwd=cfg.root) if s >= cfg.discovery.dedup_threshold
     ]
+
+
+# ---------------------------------------------------------------------------
+# Ingest-time link candidates
+# ---------------------------------------------------------------------------
+
+_STOPWORDS = frozenset(
+    """about after again also because been before being between both could does doing
+    down during each every from have having here into just like made make many more most
+    much must only other over same should some such than that their them then there these
+    they this those through under until very what when where which while will with would
+    your yours you're it's don't here's that's what's isn't""".split()
+)
+
+
+def keywords(text: str, limit: int = 6) -> list[str]:
+    """Distinctive words for a BM25 lookup: no stopwords/hashtags/handles, frequency then length."""
+    text = re.sub(r"https?://\S+|[#@]\w+", " ", text.lower())
+    text = re.sub(r"'s\b", "", text)  # brain's -> brain
+    words = [w for w in re.findall(r"[a-z][a-z0-9'-]{3,}", text) if w not in _STOPWORDS]
+    counts: dict[str, int] = {}
+    for w in words:
+        counts[w] = counts.get(w, 0) + 1
+    ranked = sorted(counts, key=lambda w: (-counts[w], -len(w), words.index(w)))
+    return ranked[:limit]
+
+
+def _prose(content: str) -> str:
+    """Raw text minus Quarry's own scaffolding (headings, '**label**:' prefixes, links)."""
+    lines = [ln for ln in content.splitlines() if not ln.lstrip().startswith("#")]
+    text = "\n".join(lines)
+    text = re.sub(r"\*\*[^*]{1,40}\*\*:", " ", text)
+    return re.sub(r"\[[^\]]*\]\([^)]*\)", " ", text)
+
+
+def ingest_candidates(cfg: Config, title: str, content: str) -> list[dict]:
+    """Up to ``[ingest] related_candidates`` existing articles to link a new one to.
+
+    BM25 (``search = "search"``) needs every term to match, so it is queried one keyword
+    at a time and scores are summed; semantic modes take one query with title + content.
+    Returns ``[{score, path, title}]`` best-first; empty when disabled or unavailable.
+    """
+    n = cfg.ingest.related_candidates
+    backend = get_backend(cfg)
+    if n <= 0 or not backend.available():
+        return []
+    if cfg.discovery.refresh:
+        backend.refresh(cwd=cfg.root)
+    scores: dict[str, int] = {}
+    matched: dict[str, int] = {}
+    min_matches = 1
+    if getattr(backend, "search", "query") == "search":
+        kws = keywords(f"{title} {_prose(content)[:3000]}", limit=10)
+        # one shared generic word is noise; with 3+ keywords, demand two in common
+        min_matches = 2 if len(kws) >= 3 else 1
+        for kw in kws:
+            for score, path in backend.query(kw, cwd=cfg.root):
+                scores[path] = scores.get(path, 0) + score
+                matched[path] = matched.get(path, 0) + 1
+    else:
+        for score, path in backend.query(f"{title} {content[:280]}", cwd=cfg.root):
+            scores[path] = max(scores.get(path, 0), score)
+            matched[path] = 1
+    index = f"{cfg.store.wiki}/{cfg.lint.index_file}" if cfg.lint.index_file else None
+    out = []
+    for path, score in sorted(scores.items(), key=lambda kv: (-matched[kv[0]], -kv[1])):
+        if path == index or matched[path] < min_matches or not (cfg.root / path).exists():
+            continue
+        out.append({"score": score, "path": path, "title": _title_of(cfg, path)})
+        if len(out) >= n:
+            break
+    return out
 
 
 # ---------------------------------------------------------------------------

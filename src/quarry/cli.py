@@ -43,8 +43,24 @@ def cmd_ingest(args: argparse.Namespace) -> int:
     print(f"  target (suggest): {target}")
     print(f"  MUST cite source: {cfg.frontmatter.sources_field}: [{m['must_cite_source']}]")
     print(f"  required frontmatter: {', '.join(m['required_frontmatter'])}")
+    meta = m.get("metadata") or {}
+    if meta.get("date"):
+        kind = f"  ({meta['kind']})" if meta.get("kind") else ""
+        print(f"  source date:      {meta['date']}{kind}")
+    assets = m.get("assets") or []
+    if assets:
+        folder = assets[0].rsplit("/", 1)[0]
+        print(f"  media ({len(assets)}):       {folder}/  — listed in the raw's ## Media section")
+        print("                    images are saved; read them only where the raw's OCR")
+        print("                    text doesn't already cover what matters")
+    cands = m.get("related_candidates") or []
+    if cands:
+        print("  link candidates (existing articles; link the relevant ones from the body):")
+        for c in cands:
+            print(f"    {c['score']:4d}  {c['path']}  — {c['title']}")
     tail = "" if res["target_wiki_path"] else " --article <path>"
     print(f"\nthen: quarry finish {res['slug']}{tail}")
+    print("  (finish finds the article by its source citation if you write it elsewhere)")
     return 0
 
 
@@ -53,8 +69,12 @@ def cmd_finish(args: argparse.Namespace) -> int:
     res = finish.run(cfg, args.slug, article=args.article, push=args.push)
     state = "committed" + (" + pushed" if res["pushed"] else "")
     if not res["committed"]:
-        state = "verified (not a git repo — skipped commit)"
+        state = "verified (nothing committed — not a git repo or no changes)"
     print(f"✓ provenance verified, lint clean, {state}: {res['article']}")
+    if res.get("indexed"):
+        print(f"✓ added to {cfg.lint.index_file}")
+    if res.get("staged"):
+        print(f"  committed {len(res['staged'])} file(s): {', '.join(res['staged'])}")
     return 0
 
 

@@ -24,6 +24,8 @@ MANIFEST_GITIGNORE_LINE = ".quarry/"
 ON_DUPLICATE_CHOICES = ("refuse", "warn", "allow")
 DISCOVERY_BACKEND_CHOICES = ("qmd", "none")
 DISCOVERY_MODE_CHOICES = ("auto", "on", "off")
+DISCOVERY_SEARCH_CHOICES = ("query", "search", "vsearch")
+FINISH_STAGE_CHOICES = ("scoped", "all")
 
 
 # ---------------------------------------------------------------------------
@@ -55,6 +57,8 @@ class IngestConfig:
     default_ext: str = "md"
     slug: str = "{date}_{kebab_title}"
     on_duplicate: str = "refuse"  # refuse | warn | allow
+    related_candidates: int = 0  # link candidates to print in the compile-spec (0 = off)
+    assets_layout: str = "{year}/{month}/{slug}"  # media dir (relative to raw/) for adapter assets
 
 
 @dataclass
@@ -71,6 +75,8 @@ class DiscoveryConfig:
     collection: str = "wiki"
     dedup_threshold: int = 85
     densify_topk: int = 6
+    search: str = "query"  # qmd subcommand: query (hybrid+rerank, slow) | search (BM25) | vsearch
+    refresh: bool = False  # run `qmd update` before ingest-time lookups (keeps the index current)
 
 
 @dataclass
@@ -91,12 +97,23 @@ class FinishConfig:
     run_lint: bool = True
     auto_push: bool = False
     commit_template: str = "wiki: {slug}"
+    stage: str = "scoped"  # scoped (this ingest's files only) | all (git add -A)
+    auto_index: bool = False  # add a missing index entry for the article on finish
 
 
 @dataclass
 class YoutubeConfig:
     comments: bool = False  # capture pinned + top community comments (needs yt-dlp getcomments)
     top_comments: int = 10  # how many top-by-likes comments to include when comments=true
+
+
+@dataclass
+class InstagramConfig:
+    media: bool = False  # save frames / carousel slides next to the raw (as assets)
+    keep_video: bool = False  # also keep the reel's video file (large) as an asset
+    frame_interval: int = 2  # seconds between sampled video frames (0 = no frames)
+    max_frames: int = 40  # cap on sampled frames (interval widens for long videos)
+    ocr: bool = True  # tesseract on frames + slides when media=true and tesseract is on PATH
 
 
 @dataclass
@@ -113,6 +130,7 @@ class Config:
     lint: LintConfig
     finish: FinishConfig
     youtube: YoutubeConfig
+    instagram: InstagramConfig
 
 
 # Maps a quarry.toml table name to its dataclass + the Config attribute it fills.
@@ -125,6 +143,7 @@ _TABLES: dict[str, tuple[type, str]] = {
     "lint": (LintConfig, "lint"),
     "finish": (FinishConfig, "finish"),
     "youtube": (YoutubeConfig, "youtube"),
+    "instagram": (InstagramConfig, "instagram"),
 }
 
 
@@ -269,6 +288,16 @@ def _validate_enums(built: dict[str, object]) -> None:
             f"[discovery] backend: must be one of {DISCOVERY_BACKEND_CHOICES}, "
             f"got '{disc.backend}'"
         )
+    if disc.search not in DISCOVERY_SEARCH_CHOICES:
+        raise ConfigError(
+            f"[discovery] search: must be one of {DISCOVERY_SEARCH_CHOICES}, "
+            f"got '{disc.search}'"
+        )
+    fin: FinishConfig = built["finish"]  # type: ignore[assignment]
+    if fin.stage not in FINISH_STAGE_CHOICES:
+        raise ConfigError(
+            f"[finish] stage: must be one of {FINISH_STAGE_CHOICES}, got '{fin.stage}'"
+        )
     if disc.mode not in DISCOVERY_MODE_CHOICES:
         raise ConfigError(
             f"[discovery] mode: must be one of {DISCOVERY_MODE_CHOICES}, "
@@ -303,6 +332,8 @@ related_field = "related"     # frontmatter field listing related wiki articles
 default_ext = "md"
 slug = "{date}_{kebab_title}" # slug template
 on_duplicate = "refuse"       # refuse | warn | allow  (governs the dedup pre-check)
+related_candidates = 0        # print N discovery link candidates in the compile-spec (0 = off)
+assets_layout = "{year}/{month}/{slug}"   # where adapter media (frames, slides) goes, under raw/
 
 [adapters]
 # allowlist; order = resolution priority (specific adapters before the catch-all web)
@@ -314,6 +345,9 @@ mode = "auto"                 # auto (use if available) | on (required) | off
 collection = "wiki"
 dedup_threshold = 85          # % match at ingest that triggers on_duplicate
 densify_topk = 6              # mutual top-K for the densify sweep
+search = "query"              # qmd mode: query (hybrid + rerank; slow cold start) | search (BM25,
+                              # instant) | vsearch (vectors only)
+refresh = false               # `qmd update` before ingest-time lookups so new articles are found
 
 [lint]
 broken_links = true
@@ -330,6 +364,10 @@ fail_on = ["broken_links", "missing_sources"]   # which checks make finish/lint 
 run_lint = true               # run the lint report as part of finish
 auto_push = false             # push after commit (otherwise push only with --push)
 commit_template = "wiki: {slug}"
+stage = "scoped"              # scoped: commit only this ingest's raw, assets, article, index and
+                              # files that link to the article | all: git add -A (pre-0.6 behaviour)
+auto_index = false            # add the article to [lint] index_file if it is missing (placed under
+                              # the heading whose entries share its wiki folder)
 
 [youtube]
 # The youtube adapter always captures the video DESCRIPTION (via yt-dlp) into the raw.
@@ -338,6 +376,13 @@ comments = false              # also capture the pinned + top community comments
                               # the pinned comment + top-by-likes are added, clearly labelled as
                               # community content (not the creator's claims).
 top_comments = 10             # how many top-by-likes comments to include when comments = true
+
+[instagram]
+media = false                 # save reel frames / carousel slides next to the raw (as assets)
+keep_video = false            # also keep the reel's video file (often 5-20 MB) as an asset
+frame_interval = 2            # seconds between sampled video frames (0 = no frames)
+max_frames = 40               # cap on sampled frames; the interval widens for long videos
+ocr = true                    # tesseract on frames + slides (needs the tesseract binary)
 """
 
 
