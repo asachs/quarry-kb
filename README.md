@@ -87,6 +87,7 @@ writes a fully-commented default. Tables:
 | `[discovery]` | `backend`, `mode`, `collection`, `dedup_threshold`, `densify_topk` | semantic-link backend (`qmd` or `none`) |
 | | `search`, `refresh` | qmd mode (`query` \| `search` (BM25, instant) \| `vsearch`); `qmd update` before ingest lookups |
 | `[lint]` | `broken_links`, `require_sources_on_disk`, `orphan_check`, `index_file`, `fail_on` | which checks run and which fail the build |
+| | `groundedness`, `raw_layout`, `wikilinks` | advisory checks: bolded names absent from sources, loose raw files, `[[wikilinks]]` (not counted as links) |
 | `[finish]` | `run_lint`, `auto_push`, `commit_template` | finish behaviour |
 | | `stage` | `scoped` (default: only this ingest's raw, assets, article, index and files linking to it) \| `all` |
 | | `auto_index` | add the article to `index_file` under the heading that holds its folder's entries |

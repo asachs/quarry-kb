@@ -273,3 +273,72 @@ def test_groundedness_ignores_labels_sentences_and_single_words(chtmp: Path):
     )
     r = lint.run(_grounded_store(chtmp, body))
     assert r.ungrounded == []  # none are multi-word Title-Case names
+
+
+# --- groundedness false positives (0.6.1) -----------------------------------
+
+
+def _store_with_raw(chtmp: Path, raw: str, body: str):
+    (chtmp / "quarry.toml").write_text("[lint]\ngroundedness = true\n")
+    c = config.load(chtmp)
+    _w(c.root / "raw" / "r.md", raw)
+    _w(c.root / "wiki" / "g.md", f"---\ntitle: G\nsources:\n  - raw/r.md\n---\n\n{body}\n")
+    return c
+
+
+def test_groundedness_hashtag_matches_spaced_name(chtmp: Path):
+    """`#bambulab` in the source grounds **Bambu Lab** (spacing/punctuation ignored)."""
+    c = _store_with_raw(chtmp, "printed on my printer #bambulab #3dprinting\n",
+                        "Uses **Bambu Lab** printers. **Prusa Research** too.")
+    flagged = [t for _, t in lint.run(c).ungrounded]
+    assert "Bambu Lab" not in flagged and "Prusa Research" in flagged
+
+
+def test_groundedness_short_token_model_names(chtmp: Path):
+    """A name made only of short tokens (`NW-L1 V2`) is matched as a whole, not
+    flagged for having no checkable words; an absent one still is."""
+    c = _store_with_raw(chtmp, "Build your own NW-L1 V2 lidar scanner.\n",
+                        "The **NW-L1 V2** scanner. Not the **XR-9 V7** though.")
+    flagged = [t for _, t in lint.run(c).ungrounded]
+    assert "NW-L1 V2" not in flagged and "XR-9 V7" in flagged
+
+
+def test_groundedness_skips_terms_marked_inferred(chtmp: Path):
+    c = _store_with_raw(chtmp, "narration over a photo of earth\n",
+                        "| **Pale Blue Dot** *(title inferred)* | x |\n"
+                        "**Cosmic Calendar** (unverified)\n**Golden Record** is here.")
+    flagged = [t for _, t in lint.run(c).ungrounded]
+    assert flagged == ["Golden Record"]
+
+
+def test_grounded_helper_requires_four_chars_for_compact_match():
+    assert not lint._grounded("**A B**".strip("*"), set(), "ab")
+    assert lint._grounded("Bambu Lab", set(), "xxbambulabxx")
+
+
+# --- wikilinks (0.6.1) ------------------------------------------------------
+
+
+def test_wikilinks_flagged_and_gateable(chtmp: Path):
+    (chtmp / "quarry.toml").write_text('[lint]\nfail_on = ["wikilinks"]\n')
+    c = config.load(chtmp)
+    _w(c.root / "wiki" / "a.md", "---\ntitle: A\n---\n\nSee [[b]] and [[c|C]].\n")
+    _w(c.root / "wiki" / "b.md", "---\ntitle: B\n---\n\n[A](a.md)\n")
+    r = lint.run(c)
+    assert r.wikilinks == [("a.md", "[[b]]"), ("a.md", "[[c|C]]")]
+    assert r.fails(["wikilinks"])
+    assert "--- WIKILINKS" in r.report and "Wikilinks:             2" in r.report
+    assert "b.md" in r.orphans  # a wikilink is not an inbound link
+
+
+def test_wikilinks_check_can_be_disabled(chtmp: Path):
+    (chtmp / "quarry.toml").write_text("[lint]\nwikilinks = false\n")
+    c = config.load(chtmp)
+    _w(c.root / "wiki" / "a.md", "---\ntitle: A\n---\n\n[[b]]\n")
+    r = lint.run(c)
+    assert r.wikilinks == [] and "WIKILINKS" not in r.report
+
+
+def test_wikilinks_ignored_inside_code():
+    text = "Use `[[like this]]` syntax.\n```\n[[in a block]]\n```\nReal: ![[img.jpg]]\n"
+    assert lint._wikilinks(text) == ["[[img.jpg]]"]
