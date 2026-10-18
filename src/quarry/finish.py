@@ -170,6 +170,12 @@ def run(cfg: Config, slug: str, *, article: str | None = None, push: bool = Fals
         if lint_result.fails(cfg.lint.fail_on):
             raise QuarryError(f"lint failed: {lint_result.summary(cfg.lint.fail_on)}")
 
+    orphan_hint: list[str] | None = None
+    if lint_result is not None and article_rel.removeprefix(cfg.store.wiki.rstrip("/") + "/") in (
+        lint_result.orphans
+    ):
+        orphan_hint = [c["path"] for c in m.get("related_candidates") or []][:3]
+
     should_push = push or cfg.finish.auto_push
     committed = False
     staged: list[str] = []
@@ -192,4 +198,6 @@ def run(cfg: Config, slug: str, *, article: str | None = None, push: bool = Fals
         "lint": lint_result,
         "indexed": indexed,
         "staged": staged,
+        "orphan": orphan_hint is not None,
+        "orphan_candidates": orphan_hint or [],
     }

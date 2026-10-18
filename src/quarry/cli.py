@@ -75,6 +75,11 @@ def cmd_finish(args: argparse.Namespace) -> int:
         print(f"✓ added to {cfg.lint.index_file}")
     if res.get("staged"):
         print(f"  committed {len(res['staged'])} file(s): {', '.join(res['staged'])}")
+    if res.get("orphan"):
+        print("⚠ no other article links to this one yet (orphan) — add a body link from a")
+        print("  related article and commit it:")
+        for c in res.get("orphan_candidates") or []:
+            print(f"    {c}")
     return 0
 
 

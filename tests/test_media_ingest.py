@@ -575,3 +575,26 @@ def test_cli_finish_reports_index_and_files(tmp_path, monkeypatch, capsys):
     assert main(["finish", SLUG]) == 0
     out = capsys.readouterr().out
     assert "added to index.md" in out and "committed 4 file(s)" in out
+
+
+# --- finish: orphan warning (0.6.1) ---------------------------------------------
+
+
+def test_finish_warns_when_article_is_orphan(tmp_path, capsys, monkeypatch):
+    c = _store(tmp_path)
+    _article(tmp_path)
+    m = manifest.load(c, SLUG)
+    m["related_candidates"] = [{"score": 9, "path": "wiki/tools/hammer.md", "title": "Hammer"}]
+    manifest.write(c, SLUG, m)
+    monkeypatch.chdir(tmp_path)
+    assert main(["finish", SLUG]) == 0
+    out = capsys.readouterr().out
+    assert "orphan" in out and "wiki/tools/hammer.md" in out
+
+
+def test_finish_no_orphan_warning_when_linked(tmp_path):
+    c = _store(tmp_path)
+    _article(tmp_path)
+    (tmp_path / "wiki/tools/saw.md").write_text("---\ntitle: Saw\n---\n\n[My Post](my-post.md)\n")
+    res = finish.run(c, SLUG)
+    assert res["orphan"] is False and res["orphan_candidates"] == []

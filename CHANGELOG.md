@@ -4,6 +4,23 @@ All notable changes to Quarry are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and Quarry adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1]
+
+### Fixed
+- **Groundedness no longer flags names that are in the source in another form.** A
+  term now also counts as grounded when the whole name appears in the source once
+  spacing and punctuation are ignored, so `**Bambu Lab**` matches `#bambulab`. A name
+  made only of short tokens (`**NW-L1 V2**`) used to have no checkable words at all and
+  was always flagged; it is now matched as a whole. Terms the author already marked
+  ("**Pale Blue Dot** *(title inferred)*", "(unverified)") are skipped.
+
+### Added
+- **`[lint] wikilinks` (default on) flags `[[wikilink]]` syntax** outside code. Link
+  checks only count `[text](path.md)`, so an article "linked" with `[[...]]` stayed an
+  orphan with no visible cause. Add `"wikilinks"` to `fail_on` to gate on it.
+- **`finish` warns when the new article is an orphan** and lists up to three of the
+  ingest's link candidates to link from (`orphan` / `orphan_candidates` in the result).
+
 ## [0.6.0]
 
 Driven by measuring an agent's ingests: across 143 Instagram/web ingest turns, 47% of

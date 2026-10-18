@@ -25,6 +25,7 @@ _CHECK_ATTR = {
     "not_indexed": "not_indexed",
     "raw_layout": "misfiled_raw",
     "groundedness": "ungrounded",
+    "wikilinks": "wikilinks",
 }
 
 
@@ -37,6 +38,7 @@ class LintResult:
     not_indexed: list[str] = field(default_factory=list)
     misfiled_raw: list[str] = field(default_factory=list)
     ungrounded: list[tuple[str, str]] = field(default_factory=list)
+    wikilinks: list[tuple[str, str]] = field(default_factory=list)
     total_articles: int = 0
     total_links: int = 0
     report: str = ""
@@ -135,6 +137,11 @@ def _gwords(text: str) -> list[str]:
     ]
 
 
+# A bolded name the author already marked as inferred/unverified ("**Pale Blue Dot**
+# *(title inferred)*") has declared its own provenance; flagging it again is noise.
+_INFERRED_MARK = re.compile(r"^\s*[*_(\[]*[^\n]{0,24}?\b(inferred|unverified|unconfirmed)\b", re.I)
+
+
 def _bold_named_terms(content: str) -> list[str]:
     """Multi-word Title-Case names in `**...**` spans — the proper-noun / build-name
     signature, as opposed to bolded labels (``**Status:**``), emphasised sentences
@@ -154,6 +161,8 @@ def _bold_named_terms(content: str) -> list[str]:
             continue
         content_words = [w for w in words if w.lower() not in _GND_STOP]
         if not content_words or not all(w[:1].isupper() for w in content_words):
+            continue
+        if _INFERRED_MARK.match(content[m.end() : m.end() + 40]):
             continue
         key = term.lower()
         if key not in seen:
@@ -177,18 +186,50 @@ def _source_text_files(p: Path) -> list[Path]:
     return []
 
 
-def _source_words(path: Path, cfg: Config) -> set[str]:
-    """Content words from every readable, local, text cited source (file or directory)."""
+def _compact(text: str) -> str:
+    """Lowercase alphanumerics only: `#bambulab`, `Bambu Lab` and `NW-L1 V2` all reduce
+    to a form that can be found as a substring regardless of spacing/punctuation."""
+    return re.sub(r"[^a-z0-9]+", "", text.lower())
+
+
+def _source_hay(path: Path, cfg: Config) -> tuple[set[str], str]:
+    """(content words, compacted text) from every readable local text cited source."""
     hay: set[str] = set()
+    compact: list[str] = []
     for s in _sources(path, cfg.frontmatter.sources_field):
         if not _is_local_source(s):
             continue
         for f in _source_text_files(cfg.root / s):
             try:
-                hay.update(_gwords(f.read_text(encoding="utf-8")))
+                text = f.read_text(encoding="utf-8")
             except (OSError, UnicodeDecodeError):
                 continue
-    return hay
+            hay.update(_gwords(text))
+            compact.append(_compact(text))
+    return hay, "\n".join(compact)
+
+
+def _source_words(path: Path, cfg: Config) -> set[str]:
+    """Content words from every readable, local, text cited source (file or directory)."""
+    return _source_hay(path, cfg)[0]
+
+
+def _grounded(term: str, hay: set[str], compact: str) -> bool:
+    """A term is grounded if any content word appears in the sources, or if the whole
+    name does once spacing/punctuation is ignored (hashtags, hyphenated model names)."""
+    if any(w in hay for w in _gwords(term)):
+        return True
+    joined = _compact(term)
+    return len(joined) >= 4 and joined in compact
+
+
+_WIKILINK = re.compile(r"\[\[([^\]\n]+)\]\]")
+_CODE = re.compile(r"```.*?```|`[^`\n]*`", re.S)
+
+
+def _wikilinks(content: str) -> list[str]:
+    """`[[...]]` occurrences outside code spans/blocks (where they're just text)."""
+    return [m.group(0) for m in _WIKILINK.finditer(_CODE.sub(" ", content))]
 
 
 
@@ -261,13 +302,19 @@ def run(cfg: Config) -> LintResult:
     ungrounded: list[tuple[str, str]] = []
     if cfg.lint.groundedness:
         for a in articles:
-            hay = _source_words(wiki / a, cfg)
-            if not hay:  # no checkable text source — can't verify, don't flag
+            hay, compact = _source_hay(wiki / a, cfg)
+            if not hay and not compact:  # no checkable text source — can't verify
                 continue
             content = (wiki / a).read_text(encoding="utf-8")
             for term in _bold_named_terms(content):
-                if not any(w in hay for w in _gwords(term)):
+                if not _grounded(term, hay, compact):
                     ungrounded.append((a, term))
+
+    wikilinks: list[tuple[str, str]] = []
+    if cfg.lint.wikilinks:
+        for a in articles:
+            for w in _wikilinks((wiki / a).read_text(encoding="utf-8")):
+                wikilinks.append((a, w))
 
     misfiled_raw = _misfiled_raw(cfg) if cfg.lint.raw_layout else []
 
@@ -286,6 +333,7 @@ def run(cfg: Config) -> LintResult:
         sorted(orphans), no_outgoing, not_indexed, total_links,
         sorted(ungrounded) if cfg.lint.groundedness else None,
         misfiled_raw,
+        sorted(wikilinks),
     )
     return LintResult(
         broken=sorted(broken),
@@ -294,6 +342,7 @@ def run(cfg: Config) -> LintResult:
         no_outgoing=sorted(no_outgoing),
         not_indexed=sorted(not_indexed),
         ungrounded=sorted(ungrounded),
+        wikilinks=sorted(wikilinks),
         misfiled_raw=misfiled_raw,
         total_articles=len(articles),
         total_links=total_links,
@@ -304,6 +353,7 @@ def run(cfg: Config) -> LintResult:
 def _format(
     wiki, articles, incoming, outgoing, broken, missing,
     orphans, no_outgoing, not_indexed, total_links, ungrounded=None, misfiled_raw=(),
+    wikilinks=(),
 ) -> str:
     n = len(articles)
     avg = total_links / n if n else 0
@@ -335,11 +385,18 @@ def _format(
         e(f"Ungrounded terms:      {len(ungrounded)}")
     if misfiled_raw:
         e(f"Misfiled raw files:    {len(misfiled_raw)}")
+    if wikilinks:
+        e(f"Wikilinks:             {len(wikilinks)}")
     e("")
     if misfiled_raw:
         e("--- MISFILED RAW (dated captures loose in the raw root) ---")
         for r in misfiled_raw:
             e(f"  {r}")
+        e("")
+    if wikilinks:
+        e("--- WIKILINKS ([[...]] is not a link here; use [text](path.md)) ---")
+        for a, w in wikilinks:
+            e(f"  {a} -> {w}")
         e("")
     if ungrounded:
         e("--- UNGROUNDED TERMS (bolded names not traceable to cited sources) ---")
