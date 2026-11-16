@@ -258,9 +258,38 @@ def test_adapters_command_lists(cfg, capsys):
 # --- integration (ISC-77) — excluded from default runs ----------------------
 
 
+# YouTube refuses some datacenter addresses (GitHub runners among them). That is
+# not a quarry defect, so the live test skips on these signatures and fails on
+# anything else.
+_YOUTUBE_BLOCK_MARKERS = (
+    "403 Client Error",
+    "429 Client Error",
+    "Too Many Requests",
+    "YouTube is blocking requests from your IP",
+    "Sign in to confirm you",
+)
+
+
+def _blocked_by_youtube(message: str) -> bool:
+    return any(m in message for m in _YOUTUBE_BLOCK_MARKERS)
+
+
+def test_blocked_by_youtube_matches_only_block_errors():
+    assert _blocked_by_youtube(
+        "youtube: no transcript ... (Request to YouTube failed: 403 Client Error: Forbidden)"
+    )
+    assert not _blocked_by_youtube("youtube: no transcript via captions, subtitles, or whisper")
+    assert not _blocked_by_youtube("youtube: could not parse a video id from https://x")
+
+
 @pytest.mark.integration
 def test_youtube_live():
-    r = YouTubeAdapter().fetch("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+    try:
+        r = YouTubeAdapter().fetch("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+    except QuarryError as e:
+        if _blocked_by_youtube(str(e)):
+            pytest.skip(f"YouTube blocked this network: {str(e)[:200]}")
+        raise
     assert r.content
 
 
