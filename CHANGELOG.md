@@ -4,6 +4,40 @@ All notable changes to Quarry are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and Quarry adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0]
+
+The next three changes from the review of the capture stage: what a reel's audio and
+frames yield, and one path for every capture.
+
+### Changed
+- **Speech is transcribed with the non-speech filter on and the `small` model** (was
+  `base`, filter off), and the audio is decoded by ffmpeg when it is installed, which takes
+  PyAV out of the path that broke silently in November. New `[speech]` settings: `model`,
+  `vad_filter`, `min_speech_seconds`, `fallback_language`, `min_language_probability`.
+- **Too little voice is not a transcript.** Transcribing 180 reels, music-only clips came
+  back as "you" or "Thanks for watching!" from under a second of detected voice. Below
+  `min_speech_seconds` (default 5) the words are withheld and the stage says why.
+- **A doubtful language is retried.** Two English reels were detected as Italian at about
+  0.5 and transcribed as nonsense. With `fallback_language` set, a detection below
+  `min_language_probability` is transcribed again in that language.
+- **The transcript stage records what was heard**: seconds of speech, clip length, language
+  and model, in the stage's detail and as fields a script can read.
+- **Frames are taken at settled moments** (`[instagram] frame_selection = "settled"`, the
+  default; `"clock"` restores the old behaviour). From each `frame_interval` window the
+  stillest moment is taken instead of wherever the tick fell, repeats of an unchanged
+  picture are dropped, and when the cap bites the frames that differ least from their
+  predecessor go first. The stage says how many of each were left out. Measured on 24
+  stored reels: the chosen frame is a still moment in 118 of 510 windows, against 71 on a
+  fixed clock. One frame per stable segment, as lecture-capture tools do, was tried first
+  and rejected: hand-held footage changes in every half second. If the change analysis
+  fails, the fixed clock is used and the stage says so.
+
+### Added
+- **`[lint] managed_since`**: from that date, a dated raw capture of a URL that carries no
+  `## Capture quality` block (so was written by hand, not by `quarry ingest`) is listed
+  under "Unmanaged captures". Add `unmanaged_raw` to `fail_on` to make it a gate. Captures
+  with no URL, and files in named category folders, are exempt.
+
 ## [0.9.1]
 
 Found by the canary on its first run: `https://arxiv.org/pdf/1706.03762` went to the web

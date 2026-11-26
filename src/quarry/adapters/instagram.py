@@ -146,6 +146,9 @@ class InstagramAdapter(Adapter):
         m = re.search(r"instagram\.com/(?:reel|p|tv)/([^/?#]+)", url)
         return m.group(1) if m else url
 
+    def _speech(self):
+        return getattr(self.cfg, "speech", None)
+
     def _settings(self) -> InstagramConfig:
         return getattr(self.cfg, "instagram", None) or InstagramConfig()
 
@@ -213,6 +216,55 @@ class InstagramAdapter(Adapter):
         )
         files = sorted(glob.glob(os.path.join(dest_dir, "frame_*.jpg")))
         return [(i * every, f) for i, f in enumerate(files)]
+
+    def _settled(self, video: str, dest_dir: str, settings: InstagramConfig):  # pragma: no cover
+        """Frames at settled moments (see quarry.frames). Returns (frames, Selection)."""
+        from quarry import frames as fr
+
+        change = fr.scores(fr.thumbnails(video))
+        sel = fr.select(
+            change, interval=float(settings.frame_interval), max_frames=settings.max_frames
+        )
+        return fr.extract(video, sel.times, dest_dir), sel
+
+    def _choose_frames(
+        self, video: str, dest_dir: str, settings: InstagramConfig
+    ) -> tuple[list[tuple[float, str]], str, dict]:
+        """The frames to keep, a line describing how they were chosen, and counts for the
+        stage record. Settled moments when the change analysis works; the fixed clock when
+        it is switched off or fails (and then the line says why)."""
+        why = ""
+        if settings.frame_selection == "settled":
+            try:
+                frames, sel = self._settled(video, dest_dir, settings)
+                if frames:
+                    return (
+                        frames,
+                        sel.describe(),
+                        {
+                            "frames": len(frames),
+                            "unchanged_dropped": sel.unchanged,
+                            "over_cap_dropped": sel.over_cap,
+                        },
+                    )
+                why = "change analysis found no frames"
+            except Exception as e:  # noqa: BLE001 - fall back, and say so
+                why = f"change analysis failed ({capture.error_detail(e)})"
+        dur = self._duration(video)
+        every = float(settings.frame_interval)
+        widened = bool(dur and settings.max_frames > 0 and dur / settings.max_frames > every)
+        if widened:
+            every = dur / settings.max_frames
+        frames = self._frames(video, dest_dir, every)[: max(settings.max_frames, 0)]
+        detail = f"{len(frames)} frames on a fixed clock, one every {every:.1f} s"
+        if widened:
+            detail += (
+                f" (spacing widened from {settings.frame_interval} s to stay within "
+                f"{settings.max_frames} frames; brief on-screen states may be missing)"
+            )
+        if why:
+            detail += f"; {why}"
+        return frames, detail, {"frames": len(frames)}
 
     def _duration(self, video: str) -> float:  # pragma: no cover - ffprobe
         r = subprocess.run(
@@ -358,26 +410,16 @@ class InstagramAdapter(Adapter):
                                 capture.stage("video kept", capture.FAILED, capture.error_detail(e))
                             )
                     if settings.frame_interval > 0 and self._tool("ffmpeg"):
-                        dur = self._duration(video)
-                        every = float(settings.frame_interval)
-                        widened = bool(
-                            dur and settings.max_frames > 0 and dur / settings.max_frames > every
-                        )
-                        if widened:
-                            every = dur / settings.max_frames
-                        frames = self._frames(video, tmp, every)[: max(settings.max_frames, 0)]
+                        frames, detail, data = self._choose_frames(video, tmp, settings)
                         for t, f in frames:
                             name = f"frame_{_mmss(t).replace(':', 'm')}s.jpg"
+                            if name in assets:  # two settled picks within the same second
+                                name = name[:-4] + f"_{int(round(t * 10)) % 10}.jpg"
                             assets[name] = f
-                        detail = f"{len(frames)} frames, one every {every:.1f} s"
-                        if widened:
-                            detail += (
-                                f" (spacing widened from {settings.frame_interval} s to stay "
-                                f"within {settings.max_frames} frames; brief on-screen states "
-                                "may be missing)"
-                            )
                         stages.append(
-                            capture.stage("frames", capture.OK if frames else capture.EMPTY, detail)
+                            capture.stage(
+                                "frames", capture.OK if frames else capture.EMPTY, detail, **data
+                            )
                         )
                         if have_ocr:
                             ocr_items = dedupe_ocr([(_mmss(t), self._ocr(f)) for t, f in frames])
@@ -409,13 +451,13 @@ class InstagramAdapter(Adapter):
                 heard = bool(video)
                 try:
                     if video:
-                        transcript = transcribe.transcribe(video)
+                        transcript = transcribe.transcribe(video, self._speech())
                     else:
                         with tempfile.TemporaryDirectory() as d:
                             wav = self._audio(url, d)
                             if wav:
                                 heard = True
-                                transcript = transcribe.transcribe(wav)
+                                transcript = transcribe.transcribe(wav, self._speech())
                 except Exception as e:  # noqa: BLE001 - audio is best-effort, but never silent
                     transcript = ""
                     detail = " ".join(str(e).split())[:160]
@@ -433,14 +475,26 @@ class InstagramAdapter(Adapter):
                             )
                         )
                     else:
+                        describe = getattr(transcript, "describe", None)
+                        detail = (
+                            describe()
+                            if describe
+                            else f"{len(transcript.split())} words; machine transcript, "
+                            "names and numbers may be misheard"
+                            if transcript
+                            else "no speech recognised (music or silence)"
+                        )
+                        data = {
+                            k: getattr(transcript, k)
+                            for k in ("speech_seconds", "duration", "language", "model")
+                            if getattr(transcript, k, None)
+                        }
                         stages.append(
                             capture.stage(
                                 "audio transcript",
                                 capture.OK if transcript else capture.EMPTY,
-                                f"{len(transcript.split())} words; machine transcript, names "
-                                "and numbers may be misheard"
-                                if transcript
-                                else "no speech recognised (music or silence)",
+                                detail,
+                                **data,
                             )
                         )
             else:

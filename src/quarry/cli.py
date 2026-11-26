@@ -228,7 +228,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     if enabled & {"youtube", "instagram"} and transcribe.available():
         why = transcribe.decode_check()
         check(
-            "audio transcription can decode audio (faster-whisper + PyAV)",
+            "audio transcription can decode audio (ffmpeg, or PyAV without it)",
             why is None,
             f"{why} — try: pip install 'av<19' in Quarry's environment",
             hard=False,

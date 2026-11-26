@@ -29,6 +29,7 @@ _CHECK_ATTR = {
     "frontmatter": "bad_frontmatter",
     "wikilinks": "wikilinks",
     "verification": "bad_verification",
+    "unmanaged_raw": "unmanaged_raw",
 }
 
 
@@ -49,6 +50,8 @@ class LintResult:
     # articles from visual sources still marked unverified (a backlog count, not a defect)
     unverified: list[str] = field(default_factory=list)
     # orphan -> how many other articles name it in frontmatter `related:` (not a body link)
+    # URL captures written since `managed_since` that did not come through `ingest`.
+    unmanaged_raw: list[str] = field(default_factory=list)
     orphan_related: dict[str, int] = field(default_factory=dict)
     total_articles: int = 0
     total_links: int = 0
@@ -336,6 +339,42 @@ def _misfiled_raw(cfg: Config) -> list[str]:
     )
 
 
+_RAW_SOURCE = re.compile(r"^source:\s*[\"']?(https?://\S+)", re.M)
+_RAW_DATE = re.compile(r"^(\d{4}-\d{2}-\d{2})[_-]")
+
+
+def _unmanaged_raw(cfg: Config) -> list[str]:
+    """Dated raw captures of a URL, on or after ``[lint] managed_since``, that carry no
+    ``## Capture quality`` block: written by hand instead of by ``quarry ingest``.
+
+    One capture path is the point. A capture written by hand has no stage record, no
+    manifest, no kept media and an ad-hoc structure, and nothing can tell later what was
+    tried. Captures of something with no URL (pasted text, a file) are not flagged, nor is
+    anything dated before the cut-off or kept in a folder that is not part of the dated
+    layout's year tree.
+    """
+    since = cfg.lint.managed_since.strip()
+    root = cfg.root / cfg.store.raw
+    if not since or not root.is_dir():
+        return []
+    out = []
+    for p in sorted(root.rglob("*.md")):
+        m = _RAW_DATE.match(p.name)
+        if not m or m.group(1) < since:
+            continue
+        rel = p.relative_to(root).parts
+        if len(rel) > 1 and not rel[0].isdigit():
+            continue  # a named category folder, outside the dated layout
+        try:
+            text = p.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        head = text[:1500].split("\n---", 1)[0]
+        if text.startswith("---") and _RAW_SOURCE.search(head) and "## Capture quality" not in text:
+            out.append(p.relative_to(cfg.root).as_posix())
+    return out
+
+
 # ---------------------------------------------------------------------------
 # run
 # ---------------------------------------------------------------------------
@@ -450,7 +489,7 @@ def run(cfg: Config) -> LintResult:
         sorted(bad_verification),
         len(unverified),
     )
-    return LintResult(
+    result = LintResult(
         broken=sorted(broken),
         missing=sorted(missing),
         orphans=sorted(orphans),
@@ -468,6 +507,16 @@ def run(cfg: Config) -> LintResult:
         total_links=total_links,
         report=report,
     )
+    result.unmanaged_raw = _unmanaged_raw(cfg)
+    if result.unmanaged_raw:
+        lines = [f"Unmanaged captures:    {len(result.unmanaged_raw)}", ""]
+        lines.append(
+            "URL captures written without `quarry ingest` (no stage record, no manifest). "
+            "Re-capture with `quarry ingest <url> --force`:"
+        )
+        lines += [f"  {r}" for r in result.unmanaged_raw]
+        result.report = result.report.rstrip("\n") + "\n\n" + "\n".join(lines) + "\n"
+    return result
 
 
 def _format(
