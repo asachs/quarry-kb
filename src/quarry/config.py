@@ -86,6 +86,9 @@ class LintConfig:
     orphan_check: bool = True
     groundedness: bool = False  # flag bolded named terms not traceable to cited text sources
     raw_layout: bool = True  # flag dated raw files sitting loose in raw/ when the layout nests them
+    related_check: bool = True  # flag `related:` entries that don't resolve under the wiki root
+    frontmatter_check: bool = True  # flag frontmatter that is missing or not valid YAML
+    wikilinks: bool = True  # flag `[[wikilinks]]` in bodies (they don't render or link)
     index_file: str = "index.md"  # "" disables the not-in-index check
     fail_on: list[str] = field(
         default_factory=lambda: ["broken_links", "missing_sources"]
@@ -355,9 +358,14 @@ require_sources_on_disk = true
 orphan_check = true           # inbound-from-body only (frontmatter related: does NOT count)
 groundedness = false          # flag bolded names absent from cited sources (anti-fabrication)
 raw_layout = true             # flag dated raw files loose in the raw root
+related_check = true          # flag `related:` entries that aren't a wiki-root-relative path
+                              # to an existing article (or a trailing-slash wiki folder)
+frontmatter_check = true      # flag frontmatter that is missing or doesn't parse as YAML
+wikilinks = true              # flag [[wikilinks]] outside code (they don't render or link)
 index_file = "index.md"       # "" disables the not-in-index check
 fail_on = ["broken_links", "missing_sources"]   # which checks make finish/lint exit non-zero
 # add "groundedness" to fail_on to make finish ABORT on ungrounded terms (else advisory-only)
+# other fail_on names: "orphans", "not_indexed", "raw_layout", "related", "frontmatter", "wikilinks"
 
 [finish]
 # what `quarry finish` does after provenance + lint pass

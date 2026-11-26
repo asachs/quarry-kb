@@ -273,3 +273,151 @@ def test_groundedness_ignores_labels_sentences_and_single_words(chtmp: Path):
     )
     r = lint.run(_grounded_store(chtmp, body))
     assert r.ungrounded == []  # none are multi-word Title-Case names
+
+
+# --- related / frontmatter / wikilinks (0.7.0) --------------------------------
+
+
+def _art(c, rel: str, fm: str, body: str = "Body.\n"):
+    _w(c.root / "wiki" / rel, f"---\n{fm}\n---\n\n{body}")
+
+
+def test_related_entries_must_resolve_under_wiki_root(cfg):
+    _art(cfg, "a/one.md", "title: One")
+    _w(cfg.root / "wiki" / "b" / "keep.md", "x")
+    _art(
+        cfg,
+        "a/two.md",
+        "title: Two\nrelated:\n"
+        "  - a/one.md\n"  # ok
+        "  - b/\n"  # ok: an existing wiki folder
+        "  - wiki/a/one.md\n"
+        "  - ../a/one.md\n"
+        "  - one.md\n"
+        "  - a/one\n"
+        "  - '[One](a/one.md)'\n"
+        "  - nope/\n"
+        "  - 7",
+    )
+    bad = [e for a, e in lint.run(cfg).bad_related if a == "a/two.md"]
+    assert bad == sorted(
+        ["wiki/a/one.md", "../a/one.md", "one.md", "a/one", "[One](a/one.md)", "nope/", "7"]
+    )
+
+
+def test_related_accepts_a_single_string_and_inline_list(cfg):
+    _art(cfg, "a/one.md", "title: One\nrelated: a/two.md")
+    _art(cfg, "a/two.md", "title: Two\nrelated: [a/one.md, wiki/a/one.md]")
+    assert lint.run(cfg).bad_related == [("a/two.md", "wiki/a/one.md")]
+
+
+def test_related_check_toggleable_and_gateable(chtmp: Path):
+    _w(chtmp / "quarry.toml", '[lint]\nrelated_check = false\nfail_on = ["related"]\n')
+    c = config.load(chtmp)
+    _art(c, "a.md", "title: A\nrelated:\n  - ghost.md")
+    r = lint.run(c)
+    assert r.bad_related == [] and not r.fails(c.lint.fail_on)
+    _w(chtmp / "quarry.toml", '[lint]\nfail_on = ["related"]\n')
+    c = config.load(chtmp)
+    r = lint.run(c)
+    assert r.bad_related == [("a.md", "ghost.md")]
+    assert r.fails(c.lint.fail_on) and r.summary(c.lint.fail_on) == "1 related"
+    assert "--- UNRESOLVED RELATED" in r.report and "  a.md -> ghost.md" in r.report
+
+
+def test_bad_frontmatter_is_reported_not_swallowed(cfg):
+    _art(cfg, "ok.md", "title: OK")
+    _w(cfg.root / "wiki" / "none.md", "Just text.\n")
+    _w(cfg.root / "wiki" / "open.md", "---\ntitle: Open\n\nNever closed.\n")
+    _w(cfg.root / "wiki" / "list.md", "---\n- a\n- b\n---\n\nBody.\n")
+    _art(cfg, "stray.md", "title: Stray\nupdated: 2026-01-01\nx\n  - raw/a.md\nrelated:\n  - ok.md")
+    _art(cfg, "quote.md", 'title: Q\nsummary: "he said "hi" to them"')
+    got = dict(lint.run(cfg).bad_frontmatter)
+    assert set(got) == {"none.md", "open.md", "list.md", "stray.md", "quote.md"}
+    assert got["none.md"] == "no frontmatter block"
+    assert got["open.md"] == "frontmatter block is not closed"
+    assert got["list.md"] == "frontmatter is not a key: value mapping"
+    assert "frontmatter line" in got["stray.md"] and "frontmatter line" in got["quote.md"]
+
+
+def test_frontmatter_check_toggleable_and_gateable(chtmp: Path):
+    _w(chtmp / "quarry.toml", '[lint]\nfail_on = ["frontmatter"]\n')
+    c = config.load(chtmp)
+    _w(c.root / "wiki" / "none.md", "Just text.\n")
+    r = lint.run(c)
+    assert r.fails(c.lint.fail_on)
+    assert "Bad frontmatter:       1" in r.report and "--- BAD FRONTMATTER" in r.report
+    _w(chtmp / "quarry.toml", "[lint]\nfrontmatter_check = false\n")
+    assert lint.run(config.load(chtmp)).bad_frontmatter == []
+
+
+def test_wikilinks_counted_outside_code(cfg):
+    _art(
+        cfg,
+        "w.md",
+        "title: W\nsummary: 'frontmatter [[not-counted]]'",
+        "See [[other-article]] and [[folder/thing|Thing]].\n\n"
+        "The syntax is `[[like this]]`.\n\n```\n[[in-a-fence]]\n```\n\n"
+        "~~~text\n[[tilde-fence]]\n~~~\n\nA nested list [[1, 2], [3]] is not one.\n",
+    )
+    _art(cfg, "clean.md", "title: Clean", "A [real](w.md) link.\n")
+    r = lint.run(cfg)
+    assert r.wikilinks == [("w.md", 2)]
+    assert "Wikilinks:             2" in r.report and "    2  w.md" in r.report
+
+
+def test_wikilinks_toggleable_and_gateable(chtmp: Path):
+    _w(chtmp / "quarry.toml", '[lint]\nfail_on = ["wikilinks"]\n')
+    c = config.load(chtmp)
+    _art(c, "w.md", "title: W", "[[x]]\n")
+    assert lint.run(c).fails(c.lint.fail_on)
+    _w(chtmp / "quarry.toml", "[lint]\nwikilinks = false\n")
+    assert lint.run(config.load(chtmp)).wikilinks == []
+
+
+def test_orphan_report_says_when_a_related_backlink_exists(cfg):
+    _art(cfg, "hub.md", "title: Hub\nrelated:\n  - lonely.md\n  - hub.md", "[Other](other.md)\n")
+    _art(cfg, "other.md", "title: Other\nrelated:\n  - lonely.md", "[Hub](hub.md)\n")
+    _art(cfg, "lonely.md", "title: Lonely")
+    _art(cfg, "island.md", "title: Island")
+    r = lint.run(cfg)
+    assert r.orphans == ["island.md", "lonely.md"]
+    assert r.orphan_related == {"island.md": 0, "lonely.md": 2}
+    assert "  lonely.md  (in 2 related: lists, no body link)" in r.report
+    assert "  island.md\n" in r.report
+
+
+def test_orphan_related_singular(cfg):
+    _art(cfg, "hub.md", "title: Hub\nrelated:\n  - lonely.md")
+    _art(cfg, "lonely.md", "title: Lonely")
+    assert "  lonely.md  (in 1 related: list, no body link)" in lint.run(cfg).report
+
+
+def test_clean_store_report_has_no_new_sections(cfg):
+    _art(cfg, "a.md", "title: A\nrelated:\n  - b.md", "[B](b.md)\n")
+    _art(cfg, "b.md", "title: B\nrelated:\n  - a.md", "[A](a.md)\n")
+    r = lint.run(cfg)
+    assert (r.bad_related, r.bad_frontmatter, r.wikilinks) == ([], [], [])
+    for marker in ("Bad frontmatter", "Unresolved related", "Wikilinks", "related: list"):
+        assert marker not in r.report
+
+
+def test_groundedness_matches_hashtags_and_handles(chtmp: Path):
+    """`**Bambu Lab**` is grounded by `#bambulab`; `**Chapter One**` by an @handle."""
+    c = _grounded_store(chtmp, "Printed on a **Bambu Lab** at **Chapter One**. **Prusa Core** no.")
+    _w(c.root / "raw" / "vid.md", "great print #bambulab #makerworld @chapterone_dublin\n")
+    assert [t for _, t in lint.run(c).ungrounded] == ["Prusa Core"]
+
+
+def test_groundedness_matches_short_token_names_as_a_phrase(chtmp: Path):
+    """A name with no content words (`NW-L1 V2`) is matched as a phrase, not flagged."""
+    c = _grounded_store(chtmp, "The **NW-L1 V2** scanner, not the **XQ-9 Z3**.")
+    _w(c.root / "raw" / "vid.md", "The NW-L1 V2 build package is out.\n")
+    assert [t for _, t in lint.run(c).ungrounded] == ["XQ-9 Z3"]
+
+
+def test_groundedness_glued_match_needs_a_real_name(chtmp: Path):
+    """Short glued strings don't ground on a coincidental substring of a tag."""
+    c = _grounded_store(chtmp, "**Go Up** now.")
+    _w(c.root / "raw" / "vid.md", "nothing relevant #lineageoupdate\n")
+    assert [t for _, t in lint.run(c).ungrounded] == ["Go Up"]

@@ -39,3 +39,13 @@ def test_malformed_yaml_returns_empty():
 def test_non_mapping_returns_empty():
     # a top-level list is valid YAML but not a frontmatter mapping
     assert frontmatter.parse("---\n- a\n- b\n---\n\nbody") == {}
+
+
+def test_problem_explains_each_degradation():
+    from quarry import frontmatter as fm
+
+    assert fm.problem("---\ntitle: T\n---\nbody") is None
+    assert fm.problem("no block") == "no frontmatter block"
+    assert fm.problem("---\ntitle: T\n") == "frontmatter block is not closed"
+    assert fm.problem("---\n- a\n---\n") == "frontmatter is not a key: value mapping"
+    assert "frontmatter line 3" in fm.problem('---\ntitle: T\nsummary: "a "b" c"\n---\n')
