@@ -120,3 +120,66 @@ def test_finish_via_cli(store, monkeypatch, capsys):
     monkeypatch.chdir(store.root)
     assert main(["finish", SLUG]) == 0
     assert "provenance verified" in capsys.readouterr().out
+
+
+# --- auto_verification (0.8.0) -------------------------------------------------
+
+
+def _visual_finish_store(root: Path, extra_fm: str = "", *, auto: bool = True) -> config.Config:
+    cfg = _build_store(root)
+    (root / "quarry.toml").write_text(
+        f"[store]\n[finish]\nauto_verification = {'true' if auto else 'false'}\n"
+        "[lint]\nverification_check = true\nfail_on = [\"verification\"]\n"
+    )
+    cfg = config.load(root)
+    frames = (root / RAW_REL).with_suffix("")
+    frames.mkdir()
+    (frames / "frame_0m00s.jpg").write_text("x")
+    art = root / TARGET
+    art.parent.mkdir(parents=True, exist_ok=True)
+    art.write_text(
+        f"---\ntitle: T\nupdated: 2026-06-28\nsources:\n  - {RAW_REL}\n"
+        f"related: []\n{extra_fm}---\n\n# T\n\nBody.\n"
+    )
+    return cfg
+
+
+def test_finish_marks_visual_source_article_unverified(tmp_path: Path):
+    cfg = _visual_finish_store(tmp_path)
+    res = finish.run(cfg, SLUG)
+    text = (tmp_path / TARGET).read_text()
+    assert res["marked_unverified"] is True and res["committed"] is True
+    assert "related: []\nverification: unverified\n---\n\n# T" in text
+    shown = subprocess.run(
+        ["git", "show", f"HEAD:{TARGET}"], cwd=tmp_path, capture_output=True, text=True
+    ).stdout
+    assert "verification: unverified" in shown  # the stamp is part of the commit
+
+
+def test_finish_never_overwrites_an_existing_status(tmp_path: Path):
+    fm = "verification: verified\nverified_on: 2026-06-28\nverified_by: me\n"
+    cfg = _visual_finish_store(tmp_path, fm)
+    res = finish.run(cfg, SLUG)
+    assert res["marked_unverified"] is False
+    assert (tmp_path / TARGET).read_text().count("verification:") == 1
+
+
+def test_finish_leaves_text_only_sources_alone(tmp_path: Path):
+    cfg = _visual_finish_store(tmp_path)
+    (tmp_path / RAW_REL).with_suffix("").joinpath("frame_0m00s.jpg").unlink()
+    assert finish.run(cfg, SLUG)["marked_unverified"] is False
+    assert "verification" not in (tmp_path / TARGET).read_text()
+
+
+def test_finish_without_auto_verification_fails_the_gate(tmp_path: Path):
+    cfg = _visual_finish_store(tmp_path, auto=False)
+    with pytest.raises(QuarryError, match="1 verification"):
+        finish.run(cfg, SLUG)
+
+
+def test_finish_cli_explains_the_stamp(tmp_path: Path, monkeypatch, capsys):
+    _visual_finish_store(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    assert main(["finish", SLUG]) == 0
+    out = capsys.readouterr().out
+    assert "marked `verification: unverified`" in out and "verified_on" in out

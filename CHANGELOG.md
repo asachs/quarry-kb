@@ -4,6 +4,28 @@ All notable changes to Quarry are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and Quarry adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0]
+
+Driven by the same audit as 0.7.0: of the articles compiled from reel frames and carousel
+slides that were checked against their images, every one had factual errors, and nothing
+in the store said which articles had been checked.
+
+### Added
+- **Verification status for articles from visual sources (`[lint] verification_check`,
+  opt-in; `fail_on` name `verification`).** A cited source is visual when it has images
+  saved beside it (`raw/x.md` + `raw/x/`, the layout `ingest` writes for adapter media).
+  An article citing one must carry `verification: unverified`, or
+  `verification: verified` together with `verified_on` and `verified_by`. The report
+  lists articles whose status is missing or incomplete, and counts those still
+  unverified as a backlog figure. The field name is `[frontmatter] verification_field`.
+- **`finish` stamps the status (`[finish] auto_verification`, opt-in).** An article from
+  a visual source that carries no status gets `verification: unverified` appended to its
+  frontmatter before lint and commit, so the default is distrust and does not depend on
+  the agent remembering. An existing status is never overwritten.
+
+Quarry still never calls a model: it records whether verification happened, and an agent
+or a person does the checking.
+
 ## [0.7.0]
 
 Driven by auditing 174 ingested articles in a live store: four defect classes had passed

@@ -73,6 +73,12 @@ def cmd_finish(args: argparse.Namespace) -> int:
     print(f"✓ provenance verified, lint clean, {state}: {res['article']}")
     if res.get("indexed"):
         print(f"✓ added to {cfg.lint.index_file}")
+    if res.get("marked_unverified"):
+        name = cfg.frontmatter.verification_field
+        print(
+            f"✓ marked `{name}: unverified` — the source has images. After checking every "
+            f"claim against them, set `{name}: verified` with `verified_on` and `verified_by`."
+        )
     if res.get("staged"):
         print(f"  committed {len(res['staged'])} file(s): {', '.join(res['staged'])}")
     return 0

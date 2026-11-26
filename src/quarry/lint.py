@@ -28,6 +28,7 @@ _CHECK_ATTR = {
     "related": "bad_related",
     "frontmatter": "bad_frontmatter",
     "wikilinks": "wikilinks",
+    "verification": "bad_verification",
 }
 
 
@@ -43,6 +44,10 @@ class LintResult:
     bad_related: list[tuple[str, str]] = field(default_factory=list)
     bad_frontmatter: list[tuple[str, str]] = field(default_factory=list)
     wikilinks: list[tuple[str, int]] = field(default_factory=list)
+    # articles from visual sources whose verification status is missing or incomplete
+    bad_verification: list[tuple[str, str]] = field(default_factory=list)
+    # articles from visual sources still marked unverified (a backlog count, not a defect)
+    unverified: list[str] = field(default_factory=list)
     # orphan -> how many other articles name it in frontmatter `related:` (not a body link)
     orphan_related: dict[str, int] = field(default_factory=dict)
     total_articles: int = 0
@@ -134,6 +139,45 @@ def _wikilink_count(content: str) -> int:
             body = content[end + 4 :]
     body = _CODE_SPAN.sub("", _FENCE.sub("", body))
     return len(_WIKILINK.findall(body))
+
+
+_IMAGE_EXT = frozenset({".jpg", ".jpeg", ".png", ".webp", ".gif"})
+VERIFICATION_STATES = ("unverified", "verified")
+_VERIFIED_RECORD = ("verified_on", "verified_by")
+
+
+def visual_sources(path: Path, cfg: Config) -> list[str]:
+    """Cited local sources that have images saved beside them (``raw/x.md`` + ``raw/x/``).
+
+    That layout is what ``ingest`` writes for adapter media (reel frames, carousel
+    slides). An article compiled from such a source states things nobody can check
+    against the raw text alone, which is why its verification status is tracked.
+    """
+    out: list[str] = []
+    for s in _sources(path, cfg.frontmatter.sources_field):
+        if not _is_local_source(s):
+            continue
+        p = cfg.root / s
+        d = p.with_suffix("")
+        if p.is_file() and d.is_dir() and any(
+            f.suffix.lower() in _IMAGE_EXT for f in d.iterdir() if f.is_file()
+        ):
+            out.append(s)
+    return out
+
+
+def verification_problem(fm: dict, field_name: str) -> str | None:
+    """Why an article from a visual source fails the status rule — ``None`` if it passes."""
+    status = fm.get(field_name)
+    if status is None:
+        return f"no `{field_name}:` (its source has images; start at `unverified`)"
+    if status not in VERIFICATION_STATES:
+        return f"`{field_name}: {status}` is not one of {', '.join(VERIFICATION_STATES)}"
+    if status == "verified":
+        absent = [k for k in _VERIFIED_RECORD if not fm.get(k)]
+        if absent:
+            return "verified without a record (" + ", ".join(absent) + " missing)"
+    return None
 
 
 def _is_local_source(source: str) -> bool:
@@ -316,6 +360,8 @@ def run(cfg: Config) -> LintResult:
     bad_related: list[tuple[str, str]] = []
     bad_frontmatter: list[tuple[str, str]] = []
     wikilinks: list[tuple[str, int]] = []
+    bad_verification: list[tuple[str, str]] = []
+    unverified: list[str] = []
     related_in: dict[str, set[str]] = defaultdict(set)
     for a in articles:
         content = (wiki / a).read_text(encoding="utf-8")
@@ -328,6 +374,13 @@ def run(cfg: Config) -> LintResult:
                 related_in[entry].add(a)
             if cfg.lint.related_check and not _related_ok(entry, wiki, aset):
                 bad_related.append((a, str(entry)))
+        if cfg.lint.verification_check and visual_sources(wiki / a, cfg):
+            fm = frontmatter.parse(content)
+            why_v = verification_problem(fm, cfg.frontmatter.verification_field)
+            if why_v:
+                bad_verification.append((a, why_v))
+            elif fm.get(cfg.frontmatter.verification_field) == "unverified":
+                unverified.append(a)
         if cfg.lint.wikilinks:
             n_wl = _wikilink_count(content)
             if n_wl:
@@ -384,6 +437,7 @@ def run(cfg: Config) -> LintResult:
         sorted(ungrounded) if cfg.lint.groundedness else None,
         misfiled_raw,
         sorted(bad_related), sorted(bad_frontmatter), sorted(wikilinks), orphan_related,
+        sorted(bad_verification), len(unverified),
     )
     return LintResult(
         broken=sorted(broken),
@@ -396,6 +450,8 @@ def run(cfg: Config) -> LintResult:
         bad_related=sorted(bad_related),
         bad_frontmatter=sorted(bad_frontmatter),
         wikilinks=sorted(wikilinks),
+        bad_verification=sorted(bad_verification),
+        unverified=sorted(unverified),
         orphan_related=orphan_related,
         total_articles=len(articles),
         total_links=total_links,
@@ -407,6 +463,7 @@ def _format(
     wiki, articles, incoming, outgoing, broken, missing,
     orphans, no_outgoing, not_indexed, total_links, ungrounded=None, misfiled_raw=(),
     bad_related=(), bad_frontmatter=(), wikilinks=(), orphan_related=None,
+    bad_verification=(), n_unverified=0,
 ) -> str:
     n = len(articles)
     avg = total_links / n if n else 0
@@ -445,7 +502,16 @@ def _format(
         e(f"Unresolved related:    {len(bad_related)}")
     if wikilinks:
         e(f"Wikilinks:             {sum(n for _, n in wikilinks)}")
+    if bad_verification:
+        e(f"Verification status:   {len(bad_verification)}")
+    if n_unverified:
+        e(f"Unverified (visual):   {n_unverified}")
     e("")
+    if bad_verification:
+        e("--- VERIFICATION STATUS (article from a visual source, status missing/incomplete) ---")
+        for a, why in bad_verification:
+            e(f"  {a} -> {why}")
+        e("")
     if bad_frontmatter:
         e("--- BAD FRONTMATTER (missing or not valid YAML — fields read as absent) ---")
         for a, why in bad_frontmatter:
