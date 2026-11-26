@@ -155,9 +155,7 @@ def test_fails_respects_fail_on():
 
 
 def test_lint_cli_exit_nonzero_on_failure(chtmp: Path, capsys):
-    (chtmp / "quarry.toml").write_text(
-        '[lint]\nfail_on = ["broken_links"]\n'
-    )
+    (chtmp / "quarry.toml").write_text('[lint]\nfail_on = ["broken_links"]\n')
     c = config.load(chtmp)
     _w(c.root / "wiki" / "a.md", "---\ntitle: A\n---\n\n[X](ghost.md)\n")
     assert main(["lint"]) == 1
@@ -182,9 +180,7 @@ _RAW = (
 
 
 def _grounded_store(chtmp: Path, body: str, *, on: bool = True, sources: str | None = None):
-    (chtmp / "quarry.toml").write_text(
-        f"[lint]\ngroundedness = {'true' if on else 'false'}\n"
-    )
+    (chtmp / "quarry.toml").write_text(f"[lint]\ngroundedness = {'true' if on else 'false'}\n")
     c = config.load(chtmp)
     _w(c.root / "raw" / "vid.md", _RAW)
     src = sources if sources is not None else "  - raw/vid.md"

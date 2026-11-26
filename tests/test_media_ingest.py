@@ -25,7 +25,10 @@ def _ig(media=True, ocr=True, frame_interval=2, max_frames=40, keep_video=True):
         (),
         {
             "instagram": config.InstagramConfig(
-                media=media, ocr=ocr, frame_interval=frame_interval, max_frames=max_frames,
+                media=media,
+                ocr=ocr,
+                frame_interval=frame_interval,
+                max_frames=max_frames,
                 keep_video=keep_video,
             )
         },
@@ -82,8 +85,14 @@ def test_is_carousel():
 
 
 def test_dedupe_ocr_drops_repeats_and_noise():
-    items = [("0:00", "HELLO  world"), ("0:02", "hello world".upper()), ("0:04", "  "),
-             ("0:06", "a."), ("0:08", "next caption"), ("0:10", "next caption")]
+    items = [
+        ("0:00", "HELLO  world"),
+        ("0:02", "hello world".upper()),
+        ("0:04", "  "),
+        ("0:06", "a."),
+        ("0:08", "next caption"),
+        ("0:10", "next caption"),
+    ]
     assert instagram.dedupe_ocr(items) == [("0:00", "HELLO world"), ("0:08", "next caption")]
 
 
@@ -141,8 +150,9 @@ def test_carousel_author_from_first_entry_and_failed_slide_noted(monkeypatch):
 
 def test_reel_with_media_frames_ocr_and_transcript(monkeypatch, tmp_path):
     a = _ig(frame_interval=2, max_frames=3)
-    monkeypatch.setattr(a, "_info", lambda url: {"description": "cap", "uploader": "u",
-                                                "upload_date": "20261001"})
+    monkeypatch.setattr(
+        a, "_info", lambda url: {"description": "cap", "uploader": "u", "upload_date": "20261001"}
+    )
 
     def video(url, d):
         p = Path(d) / "video.mp4"
@@ -161,16 +171,21 @@ def test_reel_with_media_frames_ocr_and_transcript(monkeypatch, tmp_path):
     monkeypatch.setattr(a, "_video", video)
     monkeypatch.setattr(a, "_duration", lambda v: 30.0)  # 30 s / 3 frames -> every 10 s
     seen = {}
-    monkeypatch.setattr(a, "_frames", lambda v, d, every: seen.setdefault("every", every)
-                        and frames(v, d, every))
+    monkeypatch.setattr(
+        a, "_frames", lambda v, d, every: seen.setdefault("every", every) and frames(v, d, every)
+    )
     monkeypatch.setattr(a, "_tool", lambda name: True)
     monkeypatch.setattr(a, "_ocr", lambda p: next(texts))
     monkeypatch.setattr(transcribe, "available", lambda: True)
     monkeypatch.setattr(transcribe, "transcribe", lambda p: f"spoken from {Path(p).name}")
     r = a.fetch("https://www.instagram.com/reel/XYZ/")
     assert seen["every"] == 10.0
-    assert sorted(r.assets) == ["frame_0m00s.jpg", "frame_0m10s.jpg", "frame_0m20s.jpg",
-                                "video.mp4"]
+    assert sorted(r.assets) == [
+        "frame_0m00s.jpg",
+        "frame_0m10s.jpg",
+        "frame_0m20s.jpg",
+        "video.mp4",
+    ]
     assert "spoken from video.mp4" in r.content  # transcribed from the saved video
     assert "- **0:00**: Title card" in r.content
     assert r.content.count("Title card") == 1
@@ -256,8 +271,10 @@ class AssetAdapter:
         return FetchResult(
             content="# T\n\n## Caption\nhello\n",
             metadata={"title": "My Post", "date": "2026-09-12", "url": url, "source_id": "P1"},
-            assets={"slide_01.jpg": str(self.tmpdir / "slide_01.jpg"),
-                    "video.mp4": str(self.tmpdir / "video.mp4")},
+            assets={
+                "slide_01.jpg": str(self.tmpdir / "slide_01.jpg"),
+                "video.mp4": str(self.tmpdir / "video.mp4"),
+            },
             tmpdir=str(self.tmpdir),
         )
 
@@ -345,12 +362,20 @@ def test_ingest_candidates_bm25_sums_per_keyword(chtmp, monkeypatch):
     _wiki_article(chtmp, "wiki/a.md", "Alpha")
     _wiki_article(chtmp, "wiki/b.md", "Beta")
     _wiki_article(chtmp, "wiki/c.md", "Gamma")
-    be = FakeBackend("search", {
-        "clock": [(50, "wiki/a.md"), (40, "wiki/b.md"), (90, "wiki/gone.md"),
-                  (95, "wiki/index.md"), (30, "wiki/c.md")],
-        "temperature": [(45, "wiki/b.md"), (20, "wiki/gone.md"), (60, "wiki/index.md")],
-        "swiss": [(10, "wiki/a.md"), (5, "wiki/c.md")],
-    })
+    be = FakeBackend(
+        "search",
+        {
+            "clock": [
+                (50, "wiki/a.md"),
+                (40, "wiki/b.md"),
+                (90, "wiki/gone.md"),
+                (95, "wiki/index.md"),
+                (30, "wiki/c.md"),
+            ],
+            "temperature": [(45, "wiki/b.md"), (20, "wiki/gone.md"), (60, "wiki/index.md")],
+            "swiss": [(10, "wiki/a.md"), (5, "wiki/c.md")],
+        },
+    )
     monkeypatch.setattr(discovery, "get_backend", lambda cfg: be)
     out = discovery.ingest_candidates(c, "clock temperature swiss", "")
     assert be.refreshed
@@ -403,10 +428,13 @@ def test_get_backend_passes_search_mode(chtmp, monkeypatch):
     assert discovery.get_backend(config.load(chtmp)).search == "vsearch"
 
 
-@pytest.mark.parametrize("toml,msg", [
-    ('[discovery]\nsearch = "fuzzy"\n', "search"),
-    ('[finish]\nstage = "some"\n', "stage"),
-])
+@pytest.mark.parametrize(
+    "toml,msg",
+    [
+        ('[discovery]\nsearch = "fuzzy"\n', "search"),
+        ('[finish]\nstage = "some"\n', "stage"),
+    ],
+)
 def test_new_enums_validated(chtmp, toml, msg):
     (chtmp / "quarry.toml").write_text(toml)
     with pytest.raises(ConfigError, match=msg):
@@ -445,10 +473,17 @@ def _store(root: Path, toml: str = "", target: str | None = ART) -> config.Confi
     (root / RAW).write_text("raw v2\n")
     (root / ASSET).parent.mkdir(parents=True, exist_ok=True)
     (root / ASSET).write_text("img")
-    m = manifest.build(slug=SLUG, source_url="https://x", adapter="fake", raw_path=RAW,
-                       content="raw", target_wiki_path=target,
-                       required_frontmatter=c.frontmatter.required, metadata={},
-                       assets=[ASSET])
+    m = manifest.build(
+        slug=SLUG,
+        source_url="https://x",
+        adapter="fake",
+        raw_path=RAW,
+        content="raw",
+        target_wiki_path=target,
+        required_frontmatter=c.frontmatter.required,
+        metadata={},
+        assets=[ASSET],
+    )
     manifest.write(c, SLUG, m)
     return c
 
@@ -466,7 +501,8 @@ def test_finish_scoped_commits_only_this_ingest(tmp_path):
     c = _store(tmp_path)
     _article(tmp_path)
     (tmp_path / "wiki/tools/hammer.md").write_text(
-        "---\ntitle: Hammer\n---\n\nbody\n\n- [My Post](my-post.md)\n")  # cross-link: in scope
+        "---\ntitle: Hammer\n---\n\nbody\n\n- [My Post](my-post.md)\n"
+    )  # cross-link: in scope
     (tmp_path / "wiki/food/soup.md").write_text("---\ntitle: Soup\n---\n\nedited elsewhere\n")
     (tmp_path / "raw/2026/09/other-ingest.md").write_text("someone else's raw\n")
     res = finish.run(c, SLUG)
@@ -559,8 +595,11 @@ def test_changed_paths_handles_renames_and_deletes(tmp_path):
 
 def test_cli_ingest_prints_media_and_candidates(cfg, monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(registry, "resolve_adapter", lambda c, u: AssetAdapter(tmp_path / "s"))
-    monkeypatch.setattr(discovery, "ingest_candidates",
-                        lambda c, t, b: [{"score": 80, "path": "wiki/a.md", "title": "Alpha"}])
+    monkeypatch.setattr(
+        discovery,
+        "ingest_candidates",
+        lambda c, t, b: [{"score": 80, "path": "wiki/a.md", "title": "Alpha"}],
+    )
     assert main(["ingest", "https://example.com/p"]) == 0
     out = capsys.readouterr().out
     assert "source date:      2026-09-12" in out

@@ -47,8 +47,8 @@ def test_core_modules_have_no_hardcoded_conventions():
     """ISC-98: path/convention modules carry no bare 'wiki'/'raw' literals."""
     for mod in ("store.py", "ingest.py", "finish.py", "lint.py", "manifest.py"):
         text = (SRC / mod).read_text()
-        assert '"wiki"' not in text, f"{mod} hardcodes \"wiki\""
-        assert '"raw"' not in text and '"raw/"' not in text, f"{mod} hardcodes \"raw\""
+        assert '"wiki"' not in text, f'{mod} hardcodes "wiki"'
+        assert '"raw"' not in text and '"raw/"' not in text, f'{mod} hardcodes "raw"'
 
 
 def test_core_flows_work_without_optional_extras(monkeypatch, tmp_path: Path):

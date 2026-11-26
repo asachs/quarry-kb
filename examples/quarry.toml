@@ -83,3 +83,11 @@ keep_video = false            # also keep the reel's video file (often 5-20 MB) 
 frame_interval = 2            # seconds between sampled video frames (0 = no frames)
 max_frames = 40               # cap on sampled frames; the interval widens for long videos
 ocr = true                    # tesseract on frames + slides (needs the tesseract binary)
+
+[github]
+max_chars = 200000            # budget for file contents in one capture
+max_file_chars = 20000        # cap per file, so one file cannot crowd out the rest
+max_file_bytes = 500000       # files larger than this are not fetched at all
+max_tree_lines = 400          # the directory tree is cut to a depth that fits
+exclude = []                  # extra patterns to skip, on top of the built-in list
+                              # (lockfiles, licence text, minified and generated files)

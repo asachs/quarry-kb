@@ -45,9 +45,7 @@ class StoreConfig:
 
 @dataclass
 class FrontmatterConfig:
-    required: list[str] = field(
-        default_factory=lambda: ["title", "updated", "sources", "related"]
-    )
+    required: list[str] = field(default_factory=lambda: ["title", "updated", "sources", "related"])
     sources_field: str = "sources"
     related_field: str = "related"
     verification_field: str = "verification"  # unverified | verified, for visual sources
@@ -93,9 +91,7 @@ class LintConfig:
     # Require a verification status on articles whose cited source has images beside it.
     verification_check: bool = False
     index_file: str = "index.md"  # "" disables the not-in-index check
-    fail_on: list[str] = field(
-        default_factory=lambda: ["broken_links", "missing_sources"]
-    )
+    fail_on: list[str] = field(default_factory=lambda: ["broken_links", "missing_sources"])
 
 
 @dataclass
@@ -125,6 +121,15 @@ class InstagramConfig:
 
 
 @dataclass
+class GithubConfig:
+    max_chars: int = 200_000  # budget for file contents in one capture
+    max_file_chars: int = 20_000  # cap per file, so one file cannot crowd out the rest
+    max_file_bytes: int = 500_000  # files larger than this are not fetched at all
+    max_tree_lines: int = 400  # the directory tree is cut to a depth that fits
+    exclude: list[str] = field(default_factory=list)  # extra patterns, added to the built-in list
+
+
+@dataclass
 class Config:
     """The fully-resolved configuration threaded through every command."""
 
@@ -139,6 +144,7 @@ class Config:
     finish: FinishConfig
     youtube: YoutubeConfig
     instagram: InstagramConfig
+    github: GithubConfig
 
 
 # Maps a quarry.toml table name to its dataclass + the Config attribute it fills.
@@ -152,6 +158,7 @@ _TABLES: dict[str, tuple[type, str]] = {
     "finish": (FinishConfig, "finish"),
     "youtube": (YoutubeConfig, "youtube"),
     "instagram": (InstagramConfig, "instagram"),
+    "github": (GithubConfig, "github"),
 }
 
 
@@ -206,8 +213,7 @@ def _build(cls: type, data: dict, table: str, warnings: list[str]):
         expected = spec[key].type
         if not _matches(value, expected):
             raise ConfigError(
-                f"[{table}] {key}: expected {_type_name(expected)}, "
-                f"got {type(value).__name__}"
+                f"[{table}] {key}: expected {_type_name(expected)}, got {type(value).__name__}"
             )
         kwargs[key] = value
     return cls(**kwargs)
@@ -293,13 +299,11 @@ def _validate_enums(built: dict[str, object]) -> None:
     disc: DiscoveryConfig = built["discovery"]  # type: ignore[assignment]
     if disc.backend not in DISCOVERY_BACKEND_CHOICES:
         raise ConfigError(
-            f"[discovery] backend: must be one of {DISCOVERY_BACKEND_CHOICES}, "
-            f"got '{disc.backend}'"
+            f"[discovery] backend: must be one of {DISCOVERY_BACKEND_CHOICES}, got '{disc.backend}'"
         )
     if disc.search not in DISCOVERY_SEARCH_CHOICES:
         raise ConfigError(
-            f"[discovery] search: must be one of {DISCOVERY_SEARCH_CHOICES}, "
-            f"got '{disc.search}'"
+            f"[discovery] search: must be one of {DISCOVERY_SEARCH_CHOICES}, got '{disc.search}'"
         )
     fin: FinishConfig = built["finish"]  # type: ignore[assignment]
     if fin.stage not in FINISH_STAGE_CHOICES:
@@ -308,8 +312,7 @@ def _validate_enums(built: dict[str, object]) -> None:
         )
     if disc.mode not in DISCOVERY_MODE_CHOICES:
         raise ConfigError(
-            f"[discovery] mode: must be one of {DISCOVERY_MODE_CHOICES}, "
-            f"got '{disc.mode}'"
+            f"[discovery] mode: must be one of {DISCOVERY_MODE_CHOICES}, got '{disc.mode}'"
         )
 
 
@@ -403,6 +406,14 @@ keep_video = false            # also keep the reel's video file (often 5-20 MB) 
 frame_interval = 2            # seconds between sampled video frames (0 = no frames)
 max_frames = 40               # cap on sampled frames; the interval widens for long videos
 ocr = true                    # tesseract on frames + slides (needs the tesseract binary)
+
+[github]
+max_chars = 200000            # budget for file contents in one capture
+max_file_chars = 20000        # cap per file, so one file cannot crowd out the rest
+max_file_bytes = 500000       # files larger than this are not fetched at all
+max_tree_lines = 400          # the directory tree is cut to a depth that fits
+exclude = []                  # extra patterns to skip, on top of the built-in list
+                              # (lockfiles, licence text, minified and generated files)
 """
 
 
@@ -434,7 +445,5 @@ def _ensure_gitignore(directory: Path) -> bool:
     if MANIFEST_GITIGNORE_LINE in lines:
         return False
     prefix = "" if existing == "" or existing.endswith("\n") else "\n"
-    gitignore.write_text(
-        existing + prefix + MANIFEST_GITIGNORE_LINE + "\n", encoding="utf-8"
-    )
+    gitignore.write_text(existing + prefix + MANIFEST_GITIGNORE_LINE + "\n", encoding="utf-8")
     return True
