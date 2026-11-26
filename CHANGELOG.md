@@ -4,6 +4,30 @@ All notable changes to Quarry are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and Quarry adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1]
+
+A review of two months of captures in a live store found three steps that had been failing
+without a trace. Audio transcription had raised on every Instagram reel for weeks
+(faster-whisper passes PyAV an argument that PyAV 19 removed) and the adapter, treating
+audio as best-effort, wrote the capture with no transcript and no note. The discovery
+index had not been refreshed in 43 days. No ingest had ever been given a link candidate.
+
+### Fixed
+- **`[whisper]` extra pins `av<19`**, the newest PyAV that faster-whisper 1.2.1 can decode
+  with.
+- **A failed or skipped audio transcript is written into the capture.** The Instagram
+  adapter adds a line to the raw's `## Capture notes` (`audio transcript failed (TypeError:
+  ...)`, or `skipped` when the extra is absent) instead of leaving a silent gap.
+
+### Added
+- **`quarry doctor` checks that audio can be decoded** (a fraction of a second of generated
+  silence through faster-whisper's decoder, no model load) and **that the qmd index covers
+  the wiki** (files indexed against files on disk).
+- **The manifest records what the link-candidate lookup did** (`discovery`: whether qmd
+  was available, the index refresh's exit code, queries run, articles matched), and the
+  COMPILE-SPEC says so when there are no candidates, so "nothing matched" can be told from
+  "the lookup never ran".
+
 ## [0.8.0]
 
 Driven by the same audit as 0.7.0: of the articles compiled from reel frames and carousel

@@ -317,8 +317,12 @@ class InstagramAdapter(Adapter):
                             wav = self._audio(url, d)
                             if wav:
                                 transcript = transcribe.transcribe(wav)
-                except Exception:  # noqa: BLE001 - audio is best-effort
+                except Exception as e:  # noqa: BLE001 - audio is best-effort, but never silent
                     transcript = ""
+                    detail = " ".join(str(e).split())[:160]
+                    notes.append(f"audio transcript failed ({type(e).__name__}: {detail})")
+            elif video:
+                notes.append("audio transcript skipped (the [whisper] extra is not installed)")
 
         title = caption.splitlines()[0][:80] if caption else f"instagram-{self._shortcode(url)}"
         parts = [f"# {title}", ""]
