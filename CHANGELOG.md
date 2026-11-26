@@ -4,6 +4,30 @@ All notable changes to Quarry are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and Quarry adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.3]
+
+A capture of a 2,300-file monorepo spent its whole 200,000-character budget on the licence
+text and the first part of a lockfile, stopped before any source code, and said nothing
+about it. The article written from it could not answer which database the project uses.
+
+### Fixed
+- **The GitHub adapter chooses what a capture keeps instead of cutting the digest off.**
+  Lockfiles, licence text, minified and generated files are never fetched. The rest is
+  ranked: top-level documentation, manifests, other prose, code whose name suggests the
+  project's shape (schema, models, index, main, server, routes, workers, config), then other
+  code; config noise, tests, release notes and translations only get what is left. Each
+  class has a share of the budget, so a long docs folder cannot leave the source out, and
+  each file is capped so one cannot crowd out the rest.
+- **The capture says what it left out.** A `## Capture notes` section gives the number of
+  files kept, shortened and not included, and states that anything about the files not
+  included is unverified.
+- **The directory tree is cut to a depth that fits** (`max_tree_lines`, default 400) and the
+  notes give the depth; a 2,700-line tree used to precede the contents.
+
+### Added
+- **`[github]` settings**: `max_chars`, `max_file_chars`, `max_file_bytes`, `max_tree_lines`
+  and `exclude` (extra patterns on top of the built-in list).
+
 ## [0.8.2]
 
 `ingest` needs no model; writing the article does. When the model is rate-limited the
