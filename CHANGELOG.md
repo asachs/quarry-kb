@@ -4,6 +4,19 @@ All notable changes to Quarry are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and Quarry adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.1]
+
+Found by the canary on its first run: `https://arxiv.org/pdf/1706.03762` went to the web
+adapter, which could not extract anything and said only that.
+
+### Fixed
+- **A PDF served from a URL that does not end in `.pdf` is read as a PDF.** The PDF adapter
+  claims URLs by suffix, so download endpoints, arXiv `/pdf/<id>` links and DOIs fell to the
+  web adapter. The web adapter now checks the response: if its first bytes are `%PDF-` or
+  its content type is `application/pdf`, it hands the bytes to the PDF adapter, and the
+  capture's first stage says so.
+- **A PDF's fallback title keeps dots in the last path segment** (`1706.03762`, not `1706`).
+
 ## [0.9.0]
 
 The three highest-ranked changes from a review of the capture stage. Two months of captures

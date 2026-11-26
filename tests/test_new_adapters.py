@@ -291,3 +291,54 @@ def test_github_live():
     r = GitHubAdapter().fetch("https://github.com/octocat/Hello-World")
     assert r.metadata["source_id"] == "octocat/Hello-World"
     assert r.content
+
+
+# --- a PDF served from a URL without a .pdf suffix ---------------------------
+
+
+def test_web_hands_a_pdf_response_to_the_pdf_adapter(monkeypatch):
+    from quarry.adapters.web import WebAdapter
+
+    seen = {}
+
+    def to_markdown(self, path):
+        seen["bytes"] = path.read_bytes()
+        seen["suffix"] = path.suffix
+        return "# Attention\n\nbody of the paper", {"title": "Attention Is All You Need"}
+
+    monkeypatch.setattr(PdfAdapter, "_to_markdown", to_markdown)
+    a = WebAdapter()
+    for body, ctype in (
+        (b"%PDF-1.7\nbinary", "application/pdf"),
+        (b"%PDF-1.5\nbinary", "application/octet-stream"),  # recognised by its first bytes
+        (b"\n  %PDF-1.4", ""),
+        (b"not-a-pdf-header", "application/pdf"),  # recognised by its content type
+    ):
+        monkeypatch.setattr(a, "_open", lambda url, b=body, c=ctype: (b, c, "utf-8"))
+        r = a.fetch("https://arxiv.org/pdf/1706.03762")
+        assert seen["bytes"] == body and seen["suffix"] == ".pdf"
+        assert r.metadata["title"] == "Attention Is All You Need"
+        assert r.metadata["source_id"] == "1706.03762" and r.metadata["url"].endswith("1706.03762")
+        assert [s["name"] for s in r.stages] == ["page fetched", "text"]
+        assert "the URL served a PDF" in r.stages[0]["detail"]
+
+
+def test_web_still_extracts_html_and_a_pdf_with_no_text_says_so(monkeypatch):
+    from quarry.adapters.web import WebAdapter
+
+    a = WebAdapter()
+    monkeypatch.setattr(a, "_open", lambda url: (b"<html>hi</html>", "text/html", "utf-8"))
+    monkeypatch.setattr(a, "_extract", lambda html, url: ("x" * 300, {"title": "T", "url": url}))
+    assert [s["name"] for s in a.fetch("https://x/y").stages] == ["page fetched", "article text"]
+    monkeypatch.setattr(a, "_open", lambda url: (b"%PDF-1.7", "application/pdf", "utf-8"))
+    monkeypatch.setattr(PdfAdapter, "_to_markdown", lambda self, path: ("  ", {}))
+    with pytest.raises(QuarryError, match="no extractable text"):
+        a.fetch("https://x/scan")
+
+
+def test_pdf_title_falls_back_to_the_last_path_segment(monkeypatch, tmp_path):
+    monkeypatch.setattr(PdfAdapter, "_to_markdown", lambda self, path: ("text", {}))
+    p = tmp_path / "f.pdf"
+    p.write_bytes(b"%PDF")
+    r = PdfAdapter().from_path("https://doi.example/10.1000/182/", p)
+    assert r.metadata["title"] == "182" and r.metadata["source_id"] == "182"

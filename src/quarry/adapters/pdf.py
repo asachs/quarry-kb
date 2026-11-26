@@ -59,17 +59,18 @@ class PdfAdapter(Adapter):
         return md, meta
 
     # --- contract ---------------------------------------------------------
-    def fetch(self, url: str) -> FetchResult:
-        path, is_temp = self._local_path(url)
-        try:
-            md, meta = self._to_markdown(path)
-        finally:
-            if is_temp:
-                path.unlink(missing_ok=True)
+    def from_path(self, url: str, path: Path) -> FetchResult:
+        """The capture of a PDF already on disk. ``url`` is where it came from."""
+        md, meta = self._to_markdown(path)
         if not md.strip():
             raise QuarryError(f"pdf: no extractable text from {url} (scanned + no OCR engine?)")
 
-        title = (meta.get("title") or "").strip() or Path(url.split("?")[0]).stem
+        # the last path segment, minus a .pdf suffix only: Path.stem would turn the arXiv id
+        # "1706.03762" into "1706"
+        stem = url.split("?")[0].rstrip("/").replace("\\", "/").rsplit("/", 1)[-1]
+        if stem.lower().endswith(".pdf"):
+            stem = stem[:-4]
+        title = (meta.get("title") or "").strip() or stem
         return FetchResult(
             stages=[capture.stage("text", capture.OK, f"{len(md):,} characters extracted")],
             content=md,
@@ -78,6 +79,14 @@ class PdfAdapter(Adapter):
                 "author": (meta.get("author") or "unknown").strip() or "unknown",
                 "date": _dt.date.today().isoformat(),
                 "url": url,
-                "source_id": Path(url.split("?")[0]).stem,
+                "source_id": stem,
             },
         )
+
+    def fetch(self, url: str) -> FetchResult:
+        path, is_temp = self._local_path(url)
+        try:
+            return self.from_path(url, path)
+        finally:
+            if is_temp:
+                path.unlink(missing_ok=True)
