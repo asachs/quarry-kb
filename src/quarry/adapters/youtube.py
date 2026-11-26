@@ -106,7 +106,8 @@ class YouTubeAdapter(Adapter):
             with ydl.YoutubeDL(opts) as y:
                 y.download([url])
             wavs = glob.glob(os.path.join(d, "*.wav"))
-            return transcribe.transcribe(wavs[0]) if wavs else ""
+            speech = getattr(self.cfg, "speech", None)
+            return transcribe.transcribe(wavs[0], speech) if wavs else ""
 
     def _transcript_with_fallback(self, url: str, vid: str) -> str:
         errors: list[str] = []

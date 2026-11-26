@@ -90,6 +90,10 @@ class LintConfig:
     wikilinks: bool = True  # flag `[[wikilinks]]` in bodies (they don't render or link)
     # Require a verification status on articles whose cited source has images beside it.
     verification_check: bool = False
+    # ISO date. A dated raw capture of a URL on or after it must have come through
+    # `quarry ingest` (it carries a "## Capture quality" block). "" disables the check;
+    # add "unmanaged_raw" to fail_on to make it a gate.
+    managed_since: str = ""
     # Report links that rank far from either article's nearest neighbours (never a gate).
     link_relevance: bool = False
     weak_link_rank: int = 50  # a link is weak when it ranks beyond this in both directions
@@ -120,6 +124,9 @@ class InstagramConfig:
     keep_video: bool = False  # also keep the reel's video file (large) as an asset
     frame_interval: int = 2  # seconds between sampled video frames (0 = no frames)
     max_frames: int = 40  # cap on sampled frames (interval widens for long videos)
+    # "settled": from each frame_interval window take the moment the picture was stillest,
+    # and drop repeats of an unchanged picture. "clock": one frame every frame_interval.
+    frame_selection: str = "settled"
     ocr: bool = True  # tesseract on frames + slides when media=true and tesseract is on PATH
     # Directory OUTSIDE the repository where each reel's video is kept, content-addressed,
     # so a capture can be re-transcribed or re-read later. "" keeps nothing.
@@ -133,6 +140,17 @@ class GithubConfig:
     max_file_bytes: int = 500_000  # files larger than this are not fetched at all
     max_tree_lines: int = 400  # the directory tree is cut to a depth that fits
     exclude: list[str] = field(default_factory=list)  # extra patterns, added to the built-in list
+
+
+@dataclass
+class SpeechConfig:
+    model: str = "small"  # faster-whisper model; "base" is faster and mishears more
+    vad_filter: bool = True  # drop non-speech before recognising (stops words over music)
+    # With the filter on, under this many seconds of voice the words are withheld.
+    min_speech_seconds: float = 5.0
+    # Language to retry in when detection is doubtful ("" never retries).
+    fallback_language: str = ""
+    min_language_probability: float = 0.6
 
 
 @dataclass
@@ -160,6 +178,7 @@ class Config:
     youtube: YoutubeConfig
     instagram: InstagramConfig
     github: GithubConfig
+    speech: SpeechConfig
     canary: CanaryConfig
 
 
@@ -175,6 +194,7 @@ _TABLES: dict[str, tuple[type, str]] = {
     "youtube": (YoutubeConfig, "youtube"),
     "instagram": (InstagramConfig, "instagram"),
     "github": (GithubConfig, "github"),
+    "speech": (SpeechConfig, "speech"),
     "canary": (CanaryConfig, "canary"),
 }
 
@@ -391,6 +411,9 @@ wikilinks = true              # flag [[wikilinks]] outside code (they don't rend
 verification_check = false    # an article whose cited source has images beside it (frames,
                               # slides) must carry `verification: unverified` or
                               # `verification: verified` + `verified_on` + `verified_by`
+managed_since = ""            # ISO date: a dated raw capture of a URL on or after it must have come
+                              # through `quarry ingest` (it has a "## Capture quality" block);
+                              # add "unmanaged_raw" to fail_on to make it a gate
 link_relevance = false        # report cross-links that look like padding: the two articles
                               # rank far from each other's nearest neighbours (a prompt to
                               # look, never a gate; `quarry links` lists them)
@@ -426,6 +449,9 @@ media = false                 # save reel frames / carousel slides next to the r
 keep_video = false            # also keep the reel's video file (often 5-20 MB) as an asset
 frame_interval = 2            # seconds between sampled video frames (0 = no frames)
 max_frames = 40               # cap on sampled frames; the interval widens for long videos
+frame_selection = "settled"   # "settled": from each frame_interval window take the moment the
+                              # picture was stillest and drop repeats of an unchanged picture;
+                              # "clock": one frame every frame_interval seconds
 ocr = true                    # tesseract on frames + slides (needs the tesseract binary)
 video_store = ""              # directory OUTSIDE the repository that keeps each reel's video,
                               # content-addressed (<store>/<ab>/<sha256>.mp4 + index.jsonl),
@@ -438,6 +464,13 @@ max_file_bytes = 500000       # files larger than this are not fetched at all
 max_tree_lines = 400          # the directory tree is cut to a depth that fits
 exclude = []                  # extra patterns to skip, on top of the built-in list
                               # (lockfiles, licence text, minified and generated files)
+
+[speech]
+model = "small"               # faster-whisper model ("base" is faster and mishears more)
+vad_filter = true             # drop non-speech first; without it the model writes words over music
+min_speech_seconds = 5.0      # under this much detected voice the words are withheld
+fallback_language = ""        # retry in this language when detection is doubtful, e.g. "en"
+min_language_probability = 0.6
 
 [canary]
 urls = []                     # one real, stable source per adapter you rely on, chosen so

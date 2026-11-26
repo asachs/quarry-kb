@@ -177,7 +177,7 @@ def test_reel_with_media_frames_ocr_and_transcript(monkeypatch, tmp_path):
     monkeypatch.setattr(a, "_tool", lambda name: True)
     monkeypatch.setattr(a, "_ocr", lambda p: next(texts))
     monkeypatch.setattr(transcribe, "available", lambda: True)
-    monkeypatch.setattr(transcribe, "transcribe", lambda p: f"spoken from {Path(p).name}")
+    monkeypatch.setattr(transcribe, "transcribe", lambda p, *a: f"spoken from {Path(p).name}")
     r = a.fetch("https://www.instagram.com/reel/XYZ/")
     assert seen["every"] == 10.0
     assert sorted(r.assets) == [
@@ -198,7 +198,7 @@ def test_reel_video_failure_falls_back_to_audio(monkeypatch):
     monkeypatch.setattr(a, "_video", lambda url, d: (_ for _ in ()).throw(OSError("blocked")))
     monkeypatch.setattr(transcribe, "available", lambda: True)
     monkeypatch.setattr(a, "_audio", lambda url, d: "/tmp/a.wav")
-    monkeypatch.setattr(transcribe, "transcribe", lambda p: "audio words")
+    monkeypatch.setattr(transcribe, "transcribe", lambda p, *a: "audio words")
     r = a.fetch("https://www.instagram.com/reel/XYZ/")
     assert r.assets == {}
     assert "video download failed" in r.content and "audio words" in r.content
@@ -216,7 +216,7 @@ def test_reel_video_not_kept_by_default_setting(monkeypatch):
     monkeypatch.setattr(a, "_video", video)
     monkeypatch.setattr(a, "_tool", lambda name: False)
     monkeypatch.setattr(transcribe, "available", lambda: True)
-    monkeypatch.setattr(transcribe, "transcribe", lambda p: "from the video")
+    monkeypatch.setattr(transcribe, "transcribe", lambda p, *a: "from the video")
     r = a.fetch("https://www.instagram.com/reel/XYZ/")
     assert r.assets == {} and "from the video" in r.content
     assert config.InstagramConfig().keep_video is False
@@ -636,7 +636,7 @@ def test_reel_transcript_failure_becomes_a_capture_note(monkeypatch):
     _reel_with_video(monkeypatch, a)
     monkeypatch.setattr(transcribe, "available", lambda: True)
 
-    def boom(path):
+    def boom(path, *a):
         raise TypeError("open() got an unexpected keyword argument 'metadata_errors'")
 
     monkeypatch.setattr(transcribe, "transcribe", boom)

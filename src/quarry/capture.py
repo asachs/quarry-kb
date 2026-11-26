@@ -41,10 +41,14 @@ _PACKAGES = (
 _BINARIES = (("ffmpeg", "-version"), ("tesseract", "--version"))
 
 
-def stage(name: str, status: str, detail: str = "") -> dict:
+def stage(name: str, status: str, detail: str = "", **data: object) -> dict:
+    """A stage record. ``data`` adds measured values (speech seconds, frame counts) that a
+    script can read without parsing ``detail``."""
     if status not in STATUSES:
         raise ValueError(f"unknown stage status: {status}")
-    return {"name": name, "status": status, "detail": " ".join(str(detail).split())[:240]}
+    out = {"name": name, "status": status, "detail": " ".join(str(detail).split())[:240]}
+    out.update({k: v for k, v in data.items() if k not in out})
+    return out
 
 
 def error_detail(e: BaseException) -> str:

@@ -51,6 +51,9 @@ wikilinks = true              # flag [[wikilinks]] outside code (they don't rend
 verification_check = false    # an article whose cited source has images beside it (frames,
                               # slides) must carry `verification: unverified` or
                               # `verification: verified` + `verified_on` + `verified_by`
+managed_since = ""            # ISO date: a dated raw capture of a URL on or after it must have come
+                              # through `quarry ingest` (it has a "## Capture quality" block);
+                              # add "unmanaged_raw" to fail_on to make it a gate
 link_relevance = false        # report cross-links that look like padding: the two articles
                               # rank far from each other's nearest neighbours (a prompt to
                               # look, never a gate; `quarry links` lists them)
@@ -86,6 +89,9 @@ media = false                 # save reel frames / carousel slides next to the r
 keep_video = false            # also keep the reel's video file (often 5-20 MB) as an asset
 frame_interval = 2            # seconds between sampled video frames (0 = no frames)
 max_frames = 40               # cap on sampled frames; the interval widens for long videos
+frame_selection = "settled"   # "settled": from each frame_interval window take the moment the
+                              # picture was stillest and drop repeats of an unchanged picture;
+                              # "clock": one frame every frame_interval seconds
 ocr = true                    # tesseract on frames + slides (needs the tesseract binary)
 video_store = ""              # directory OUTSIDE the repository that keeps each reel's video,
                               # content-addressed (<store>/<ab>/<sha256>.mp4 + index.jsonl),
@@ -98,6 +104,13 @@ max_file_bytes = 500000       # files larger than this are not fetched at all
 max_tree_lines = 400          # the directory tree is cut to a depth that fits
 exclude = []                  # extra patterns to skip, on top of the built-in list
                               # (lockfiles, licence text, minified and generated files)
+
+[speech]
+model = "small"               # faster-whisper model ("base" is faster and mishears more)
+vad_filter = true             # drop non-speech first; without it the model writes words over music
+min_speech_seconds = 5.0      # under this much detected voice the words are withheld
+fallback_language = ""        # retry in this language when detection is doubtful, e.g. "en"
+min_language_probability = 0.6
 
 [canary]
 urls = []                     # one real, stable source per adapter you rely on, chosen so

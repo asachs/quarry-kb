@@ -164,7 +164,7 @@ def test_instagram_audio_transcript(monkeypatch):
     monkeypatch.setattr(a, "_info", lambda url: {"description": "cap", "uploader": "c"})
     monkeypatch.setattr(transcribe, "available", lambda: True)
     monkeypatch.setattr(a, "_audio", lambda url, d: "/tmp/a.wav")
-    monkeypatch.setattr(transcribe, "transcribe", lambda p: "spoken words here")
+    monkeypatch.setattr(transcribe, "transcribe", lambda p, *a: "spoken words here")
     r = a.fetch("https://instagram.com/reel/ABC/")
     assert "spoken words here" in r.content
 
