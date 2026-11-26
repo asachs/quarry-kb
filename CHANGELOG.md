@@ -4,6 +4,39 @@ All notable changes to Quarry are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and Quarry adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0]
+
+Driven by auditing 174 ingested articles in a live store: four defect classes had passed
+`finish` and `lint` without a word, because nothing looked for them.
+
+### Added
+- **`related:` entries are checked (`[lint] related_check`, on by default; `fail_on`
+  name `related`).** An entry must be a wiki-root-relative path to an existing article,
+  or a trailing-slash path to an existing wiki folder. A `wiki/` prefix, a `../` path,
+  markdown-link syntax, a missing `.md` or a non-string entry is reported as
+  `article -> entry`. 50 such entries had accumulated unnoticed.
+- **Unparseable frontmatter is reported (`[lint] frontmatter_check`, on by default;
+  `fail_on` name `frontmatter`).** Frontmatter parsing degrades to an empty mapping so
+  callers never crash, which also meant an article with one malformed YAML line silently
+  lost its `sources` and `related`. The report gives the reason and the line.
+- **`[[wikilinks]]` are reported (`[lint] wikilinks`, on by default; `fail_on` name
+  `wikilinks`).** They do not render in plain markdown and never counted as links.
+  Code fences and code spans are ignored, so an article can still discuss the syntax.
+- **Orphans say whether a frontmatter backlink exists.** An orphan that other articles
+  name in `related:` is listed as `(in N related: lists, no body link)`: the backlink was
+  written, just not where the orphan check counts it. `LintResult.orphan_related` carries
+  the counts.
+
+### Changed
+- **Groundedness matches names the way sources actually write them.** A bolded name is
+  now also grounded when its words appear glued together in a hashtag or handle
+  (`**Bambu Lab**` against `#bambulab`), and a name made only of short tokens
+  (`**NW-L1 V2**`) is matched as a phrase instead of being flagged because it has no
+  content words. Names read off images remain unverifiable by a text check.
+
+The three new summary lines and sections print only when they have something to report,
+so the report for a clean store is unchanged.
+
 ## [0.6.0]
 
 Driven by measuring an agent's ingests: across 143 Instagram/web ingest turns, 47% of

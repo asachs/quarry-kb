@@ -24,3 +24,26 @@ def parse(text: str) -> dict:
     except yaml.YAMLError:
         return {}
     return data if isinstance(data, dict) else {}
+
+
+def problem(text: str) -> str | None:
+    """Why ``parse`` would return ``{}`` for ``text`` — ``None`` if it parses cleanly.
+
+    ``parse`` deliberately degrades to an empty mapping so callers never crash; the
+    lint uses this to surface the silent degradation (an article whose ``sources`` or
+    ``related`` quietly vanished because one line of YAML was malformed).
+    """
+    if not text.startswith("---"):
+        return "no frontmatter block"
+    end = text.find("\n---", 3)
+    if end == -1:
+        return "frontmatter block is not closed"
+    try:
+        data = yaml.safe_load(text[3:end])
+    except yaml.YAMLError as e:
+        mark = getattr(e, "problem_mark", None)
+        what = getattr(e, "problem", None) or "invalid YAML"
+        return f"{what} (frontmatter line {mark.line + 1})" if mark else str(what)
+    if not isinstance(data, dict):
+        return "frontmatter is not a key: value mapping"
+    return None

@@ -25,6 +25,9 @@ _CHECK_ATTR = {
     "not_indexed": "not_indexed",
     "raw_layout": "misfiled_raw",
     "groundedness": "ungrounded",
+    "related": "bad_related",
+    "frontmatter": "bad_frontmatter",
+    "wikilinks": "wikilinks",
 }
 
 
@@ -37,6 +40,11 @@ class LintResult:
     not_indexed: list[str] = field(default_factory=list)
     misfiled_raw: list[str] = field(default_factory=list)
     ungrounded: list[tuple[str, str]] = field(default_factory=list)
+    bad_related: list[tuple[str, str]] = field(default_factory=list)
+    bad_frontmatter: list[tuple[str, str]] = field(default_factory=list)
+    wikilinks: list[tuple[str, int]] = field(default_factory=list)
+    # orphan -> how many other articles name it in frontmatter `related:` (not a body link)
+    orphan_related: dict[str, int] = field(default_factory=dict)
     total_articles: int = 0
     total_links: int = 0
     report: str = ""
@@ -90,6 +98,42 @@ def _sources(path: Path, sources_field: str) -> list[str]:
     if isinstance(s, str):
         s = [s]
     return [x for x in s if isinstance(x, str)]
+
+
+def _related(fm: dict, related_field: str) -> list[object]:
+    r = fm.get(related_field) or []
+    return r if isinstance(r, list) else [r]
+
+
+def _related_ok(entry: object, wiki: Path, aset: set[str]) -> bool:
+    """A ``related:`` entry is a wiki-root-relative path to an existing article, or a
+    trailing-slash path to an existing wiki folder. Anything else — a ``wiki/`` prefix,
+    a ``../`` path, markdown-link syntax, a missing ``.md`` — resolves to nothing for
+    the tools that read the field, and does so silently."""
+    if not isinstance(entry, str):
+        return False
+    if entry in aset:
+        return True
+    if entry.endswith("/") and ".." not in Path(entry).parts and not entry.startswith("/"):
+        return (wiki / entry).is_dir()
+    return False
+
+
+_FENCE = re.compile(r"^(```|~~~).*?^\1[^\n]*$", flags=re.DOTALL | re.MULTILINE)
+_CODE_SPAN = re.compile(r"`[^`\n]*`")
+_WIKILINK = re.compile(r"\[\[[^\[\]\n]+\]\]")
+
+
+def _wikilink_count(content: str) -> int:
+    """`[[wikilinks]]` in the body, ignoring code fences and code spans (an article
+    may legitimately discuss the syntax)."""
+    body = content
+    if content.startswith("---"):
+        end = content.find("\n---", 3)
+        if end != -1:
+            body = content[end + 4 :]
+    body = _CODE_SPAN.sub("", _FENCE.sub("", body))
+    return len(_WIKILINK.findall(body))
 
 
 def _is_local_source(source: str) -> bool:
@@ -177,18 +221,52 @@ def _source_text_files(p: Path) -> list[Path]:
     return []
 
 
-def _source_words(path: Path, cfg: Config) -> set[str]:
-    """Content words from every readable, local, text cited source (file or directory)."""
-    hay: set[str] = set()
+# A handle or hashtag glues a name into one token (`#bambulab`, `@chapterone_dublin`).
+_GLUED = re.compile(r"[#@]([a-z0-9_.]+)")
+
+
+@dataclass
+class _SourceText:
+    """What the cited text sources say, in the three forms a name can be matched in."""
+
+    words: set[str] = field(default_factory=set)  # stemmed content words
+    glued: set[str] = field(default_factory=set)  # hashtag / handle tokens, alnum only
+    flat: str = ""  # all text, lowercased, non-alphanumerics collapsed to single spaces
+
+    def __bool__(self) -> bool:
+        return bool(self.words or self.flat.strip())
+
+    def grounds(self, term: str) -> bool:
+        tw = _gwords(term)
+        if tw and any(w in self.words for w in tw):
+            return True
+        flat_term = re.sub(r"[^a-z0-9]+", " ", term.lower()).strip()
+        if not tw:
+            # A name made only of short tokens (`NW-L1 V2`) has no content words to
+            # match on; fall back to the phrase itself rather than flag it unseen.
+            return bool(flat_term) and f" {flat_term} " in f" {self.flat} "
+        joined = flat_term.replace(" ", "")
+        return len(joined) >= 6 and any(joined in g for g in self.glued)
+
+
+def _source_text(path: Path, cfg: Config) -> _SourceText:
+    """Text from every readable, local, text cited source (file or directory)."""
+    st = _SourceText()
+    chunks: list[str] = []
     for s in _sources(path, cfg.frontmatter.sources_field):
         if not _is_local_source(s):
             continue
         for f in _source_text_files(cfg.root / s):
             try:
-                hay.update(_gwords(f.read_text(encoding="utf-8")))
+                text = f.read_text(encoding="utf-8")
             except (OSError, UnicodeDecodeError):
                 continue
-    return hay
+            st.words.update(_gwords(text))
+            low = text.lower()
+            st.glued.update(re.sub(r"[^a-z0-9]", "", g) for g in _GLUED.findall(low))
+            chunks.append(re.sub(r"[^a-z0-9]+", " ", low))
+    st.flat = " ".join(chunks)
+    return st
 
 
 
@@ -235,8 +313,25 @@ def run(cfg: Config) -> LintResult:
     broken: list[tuple[str, str]] = []
     need_links = cfg.lint.broken_links or cfg.lint.orphan_check
     raw_prefixes = (f"{cfg.store.raw}/", f"../{cfg.store.raw}/")  # links into raw/ aren't broken
+    bad_related: list[tuple[str, str]] = []
+    bad_frontmatter: list[tuple[str, str]] = []
+    wikilinks: list[tuple[str, int]] = []
+    related_in: dict[str, set[str]] = defaultdict(set)
     for a in articles:
         content = (wiki / a).read_text(encoding="utf-8")
+        if cfg.lint.frontmatter_check:
+            why = frontmatter.problem(content)
+            if why:
+                bad_frontmatter.append((a, why))
+        for entry in _related(frontmatter.parse(content), cfg.frontmatter.related_field):
+            if isinstance(entry, str) and entry in aset:
+                related_in[entry].add(a)
+            if cfg.lint.related_check and not _related_ok(entry, wiki, aset):
+                bad_related.append((a, str(entry)))
+        if cfg.lint.wikilinks:
+            n_wl = _wikilink_count(content)
+            if n_wl:
+                wikilinks.append((a, n_wl))
         links = _body_links(content, a) if need_links else set()
         outgoing[a] = links
         for t in links:
@@ -256,17 +351,19 @@ def run(cfg: Config) -> LintResult:
     if cfg.lint.orphan_check:
         orphans = [a for a in articles if not (incoming[a] - {index})]
 
+    orphan_related = {a: len(related_in[a] - {a}) for a in orphans}
+
     no_outgoing = [a for a in articles if not outgoing.get(a)]
 
     ungrounded: list[tuple[str, str]] = []
     if cfg.lint.groundedness:
         for a in articles:
-            hay = _source_words(wiki / a, cfg)
-            if not hay:  # no checkable text source — can't verify, don't flag
+            src = _source_text(wiki / a, cfg)
+            if not src:  # no checkable text source — can't verify, don't flag
                 continue
             content = (wiki / a).read_text(encoding="utf-8")
             for term in _bold_named_terms(content):
-                if not any(w in hay for w in _gwords(term)):
+                if not src.grounds(term):
                     ungrounded.append((a, term))
 
     misfiled_raw = _misfiled_raw(cfg) if cfg.lint.raw_layout else []
@@ -286,6 +383,7 @@ def run(cfg: Config) -> LintResult:
         sorted(orphans), no_outgoing, not_indexed, total_links,
         sorted(ungrounded) if cfg.lint.groundedness else None,
         misfiled_raw,
+        sorted(bad_related), sorted(bad_frontmatter), sorted(wikilinks), orphan_related,
     )
     return LintResult(
         broken=sorted(broken),
@@ -295,6 +393,10 @@ def run(cfg: Config) -> LintResult:
         not_indexed=sorted(not_indexed),
         ungrounded=sorted(ungrounded),
         misfiled_raw=misfiled_raw,
+        bad_related=sorted(bad_related),
+        bad_frontmatter=sorted(bad_frontmatter),
+        wikilinks=sorted(wikilinks),
+        orphan_related=orphan_related,
         total_articles=len(articles),
         total_links=total_links,
         report=report,
@@ -304,6 +406,7 @@ def run(cfg: Config) -> LintResult:
 def _format(
     wiki, articles, incoming, outgoing, broken, missing,
     orphans, no_outgoing, not_indexed, total_links, ungrounded=None, misfiled_raw=(),
+    bad_related=(), bad_frontmatter=(), wikilinks=(), orphan_related=None,
 ) -> str:
     n = len(articles)
     avg = total_links / n if n else 0
@@ -335,7 +438,29 @@ def _format(
         e(f"Ungrounded terms:      {len(ungrounded)}")
     if misfiled_raw:
         e(f"Misfiled raw files:    {len(misfiled_raw)}")
+    # The three below print only when non-zero, so a clean store's report is unchanged.
+    if bad_frontmatter:
+        e(f"Bad frontmatter:       {len(bad_frontmatter)}")
+    if bad_related:
+        e(f"Unresolved related:    {len(bad_related)}")
+    if wikilinks:
+        e(f"Wikilinks:             {sum(n for _, n in wikilinks)}")
     e("")
+    if bad_frontmatter:
+        e("--- BAD FRONTMATTER (missing or not valid YAML — fields read as absent) ---")
+        for a, why in bad_frontmatter:
+            e(f"  {a} -> {why}")
+        e("")
+    if bad_related:
+        e("--- UNRESOLVED RELATED (not a wiki-root-relative path to an article) ---")
+        for a, entry in bad_related:
+            e(f"  {a} -> {entry}")
+        e("")
+    if wikilinks:
+        e("--- WIKILINKS ([[...]] does not render or count as a link) ---")
+        for a, n_wl in wikilinks:
+            e(f"  {n_wl:3d}  {a}")
+        e("")
     if misfiled_raw:
         e("--- MISFILED RAW (dated captures loose in the raw root) ---")
         for r in misfiled_raw:
@@ -363,7 +488,11 @@ def _format(
     if orphans:
         e("--- ORPHANED ARTICLES (no inbound from body) ---")
         for a in orphans:
-            e(f"  {a}")
+            n_rel = (orphan_related or {}).get(a, 0)
+            # Named in other articles' frontmatter only: the backlink exists but isn't
+            # a body link, which is the one thing that fixes an orphan.
+            e(f"  {a}  (in {n_rel} related: list{'s' if n_rel != 1 else ''}, no body link)"
+              if n_rel else f"  {a}")
         e("")
     e("--- CATEGORY HEALTH ---")
     for cat in sorted(cats):
