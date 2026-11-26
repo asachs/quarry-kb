@@ -121,6 +121,9 @@ class InstagramConfig:
     frame_interval: int = 2  # seconds between sampled video frames (0 = no frames)
     max_frames: int = 40  # cap on sampled frames (interval widens for long videos)
     ocr: bool = True  # tesseract on frames + slides when media=true and tesseract is on PATH
+    # Directory OUTSIDE the repository where each reel's video is kept, content-addressed,
+    # so a capture can be re-transcribed or re-read later. "" keeps nothing.
+    video_store: str = ""
 
 
 @dataclass
@@ -130,6 +133,15 @@ class GithubConfig:
     max_file_bytes: int = 500_000  # files larger than this are not fetched at all
     max_tree_lines: int = 400  # the directory tree is cut to a depth that fits
     exclude: list[str] = field(default_factory=list)  # extra patterns, added to the built-in list
+
+
+@dataclass
+class CanaryConfig:
+    # One real, stable source per adapter you rely on, chosen so that every stage should
+    # succeed on it (for a reel: narration and on-screen text). `quarry canary` captures
+    # each without storing anything and fails if any stage is empty or failed.
+    urls: list[str] = field(default_factory=list)
+    max_age_hours: int = 36  # `quarry doctor` complains when the last run is older
 
 
 @dataclass
@@ -148,6 +160,7 @@ class Config:
     youtube: YoutubeConfig
     instagram: InstagramConfig
     github: GithubConfig
+    canary: CanaryConfig
 
 
 # Maps a quarry.toml table name to its dataclass + the Config attribute it fills.
@@ -162,6 +175,7 @@ _TABLES: dict[str, tuple[type, str]] = {
     "youtube": (YoutubeConfig, "youtube"),
     "instagram": (InstagramConfig, "instagram"),
     "github": (GithubConfig, "github"),
+    "canary": (CanaryConfig, "canary"),
 }
 
 
@@ -413,6 +427,9 @@ keep_video = false            # also keep the reel's video file (often 5-20 MB) 
 frame_interval = 2            # seconds between sampled video frames (0 = no frames)
 max_frames = 40               # cap on sampled frames; the interval widens for long videos
 ocr = true                    # tesseract on frames + slides (needs the tesseract binary)
+video_store = ""              # directory OUTSIDE the repository that keeps each reel's video,
+                              # content-addressed (<store>/<ab>/<sha256>.mp4 + index.jsonl),
+                              # with the hash in the manifest; "" keeps nothing. Needs media.
 
 [github]
 max_chars = 200000            # budget for file contents in one capture
@@ -421,6 +438,13 @@ max_file_bytes = 500000       # files larger than this are not fetched at all
 max_tree_lines = 400          # the directory tree is cut to a depth that fits
 exclude = []                  # extra patterns to skip, on top of the built-in list
                               # (lockfiles, licence text, minified and generated files)
+
+[canary]
+urls = []                     # one real, stable source per adapter you rely on, chosen so
+                              # every stage should succeed on it. `quarry canary` captures
+                              # each (storing nothing) and fails on any empty or failed
+                              # stage; schedule it daily
+max_age_hours = 36            # `quarry doctor` complains when the last run is older
 """
 
 

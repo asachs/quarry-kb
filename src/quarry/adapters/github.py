@@ -21,6 +21,7 @@ import datetime as _dt
 import fnmatch
 import re
 
+from quarry import capture
 from quarry.adapters.base import Adapter, FetchResult
 from quarry.config import GithubConfig
 from quarry.errors import QuarryError
@@ -289,7 +290,27 @@ class GitHubAdapter(Adapter):
             body += "## Capture notes\n\n" + "\n".join(f"- {n}" for n in notes) + "\n\n"
         body += f"## Tree\n\n{tree}\n\n## Contents\n\n{content}"
 
+        if files:
+            left = len(stats["left_out"])
+            stages = [
+                capture.stage("repository read", capture.OK, f"{len(wanted):,} text files"),
+                capture.stage(
+                    "contents",
+                    capture.OK if kept else capture.EMPTY,
+                    f"{len(kept):,} files included"
+                    + (f"; {left:,} did not fit and are not in this capture" if left else ""),
+                ),
+            ]
+        else:
+            stages = [
+                capture.stage(
+                    "contents",
+                    capture.OK if content.strip() else capture.EMPTY,
+                    f"{len(content):,} characters (digest shape not recognised)",
+                )
+            ]
         return FetchResult(
+            stages=stages,
             content=body,
             metadata={
                 "title": f"{owner}/{repo}",

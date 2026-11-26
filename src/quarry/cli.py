@@ -13,6 +13,8 @@ import sys
 
 from quarry import (
     __version__,
+    canary,
+    capture,
     config,
     discovery,
     finish,
@@ -59,6 +61,15 @@ def cmd_ingest(args: argparse.Namespace) -> int:
     if meta.get("date"):
         kind = f"  ({meta['kind']})" if meta.get("kind") else ""
         print(f"  source date:      {meta['date']}{kind}")
+    bad = capture.problems(m.get("stages") or [])
+    if bad:
+        print("  CAPTURE PROBLEMS (also at the top of the raw, under ## Capture quality):")
+        for st in bad:
+            detail = f" — {st['detail']}" if st["detail"] else ""
+            print(f"    {st['name']}: {st['status'].upper()}{detail}")
+        print("    say so in your reply, and do not fill these gaps from expectation")
+    for rec in m.get("stored") or []:
+        print(f"  kept outside git: {rec['kind']} sha256 {rec['sha256'][:16]}…  {rec['path']}")
     assets = m.get("assets") or []
     if assets:
         folder = assets[0].rsplit("/", 1)[0]
@@ -67,7 +78,7 @@ def cmd_ingest(args: argparse.Namespace) -> int:
         print("                    text doesn't already cover what matters")
     cands = m.get("related_candidates") or []
     if cands:
-        print("  link candidates (existing articles; link the relevant ones from the body):")
+        print("  link candidates (keyword matches: candidates, not instructions; many are noise):")
         for c in cands:
             print(f"    {c['score']:4d}  {c['path']}  — {c['title']}")
     else:
@@ -238,7 +249,38 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             "the index is stale — run `qmd update` (and `qmd embed` for semantic search)",
             hard=False,
         )
+    if cfg.canary.urls:
+        healthy, why = canary.health(cfg)
+        check(
+            f"canary captures ({why})", healthy, "run `quarry canary` to see each stage", hard=False
+        )
+    looked, sym = canary.symptoms(cfg)
+    if looked:
+        check(
+            f"recent captures ({looked} looked at): "
+            + ("; ".join(sym) if sym else "no stage failing or empty unusually often"),
+            not sym,
+            "a stage that fails this often is broken, not unlucky",
+            hard=False,
+        )
     return 0 if ok else 1
+
+
+def cmd_canary(args: argparse.Namespace) -> int:
+    cfg = config.load()
+    if not cfg.canary.urls:
+        raise QuarryError("no canary sources — set [canary] urls in quarry.toml")
+    rec = canary.run(cfg)
+    if args.json:
+        print(json.dumps(rec, indent=1, ensure_ascii=False))
+    else:
+        for r in rec["results"]:
+            mark = "ok  " if r["ok"] else "FAIL"
+            print(f"[{mark}] {r['adapter'] or '?':10} {r['url']}")
+            for prob in r["problems"]:
+                print(f"         {prob}")
+        print(f"{rec['passed']} of {rec['total']} canary captures passed")
+    return 0 if rec["passed"] == rec["total"] else 1
 
 
 def _discovery_backend_or_exit(cfg) -> object | None:
@@ -356,6 +398,10 @@ def build_parser() -> argparse.ArgumentParser:
     pp = sub.add_parser("pending", help="captures that have no wiki article yet")
     pp.add_argument("--json", action="store_true", help="machine-readable output")
     pp.set_defaults(func=cmd_pending)
+
+    pc = sub.add_parser("canary", help="capture the known-good sources and check every stage")
+    pc.add_argument("--json", action="store_true", help="machine-readable output")
+    pc.set_defaults(func=cmd_canary)
 
     pk = sub.add_parser("links", help="cross-links that look like padding (report only)")
     pk.add_argument("article", nargs="?", help="one article; omit for the whole wiki")

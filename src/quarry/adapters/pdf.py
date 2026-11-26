@@ -13,6 +13,7 @@ import tempfile
 import urllib.request
 from pathlib import Path
 
+from quarry import capture
 from quarry.adapters.base import Adapter, FetchResult
 from quarry.errors import QuarryError
 
@@ -70,6 +71,7 @@ class PdfAdapter(Adapter):
 
         title = (meta.get("title") or "").strip() or Path(url.split("?")[0]).stem
         return FetchResult(
+            stages=[capture.stage("text", capture.OK, f"{len(md):,} characters extracted")],
             content=md,
             metadata={
                 "title": title,
