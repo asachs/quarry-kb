@@ -162,6 +162,10 @@ def decode_check() -> str | None:
     """
     if not available():
         return "the [whisper] extra is not installed"
+    import shutil
+
+    if shutil.which("ffmpeg"):
+        return None  # audio is decoded by ffmpeg and handed over as samples; PyAV is not used
     import os
     import tempfile
     import wave

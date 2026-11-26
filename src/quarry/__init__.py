@@ -6,7 +6,7 @@ the one irreducibly-generative step — writing the article — happens between 
 calls `quarry ingest` and `quarry finish`.
 """
 
-__version__ = "0.9.1"
+__version__ = "0.10.0"
 
 from quarry.errors import ConfigError, QuarryError
 

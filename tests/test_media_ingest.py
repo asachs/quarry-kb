@@ -673,6 +673,11 @@ def test_decode_check_reports_a_broken_decoder(monkeypatch):
     fake.decode_audio = decode_audio
     monkeypatch.setitem(sys.modules, "faster_whisper", types.ModuleType("faster_whisper"))
     monkeypatch.setitem(sys.modules, "faster_whisper.audio", fake)
+    import shutil
+
+    monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/ffmpeg")
+    assert transcribe.decode_check() is None  # ffmpeg decodes; PyAV is not in the path
+    monkeypatch.setattr(shutil, "which", lambda name: None)
     assert transcribe.decode_check().startswith("TypeError: open() got an unexpected")
     fake.decode_audio = lambda path, sampling_rate: None
     assert transcribe.decode_check() is None

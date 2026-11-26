@@ -413,6 +413,8 @@ class InstagramAdapter(Adapter):
                         frames, detail, data = self._choose_frames(video, tmp, settings)
                         for t, f in frames:
                             name = f"frame_{_mmss(t).replace(':', 'm')}s.jpg"
+                            if name in assets:  # two settled picks within the same second
+                                name = name[:-4] + f"_{int(round(t * 10)) % 10}.jpg"
                             assets[name] = f
                         stages.append(
                             capture.stage(
