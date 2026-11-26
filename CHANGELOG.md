@@ -4,6 +4,28 @@ All notable changes to Quarry are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and Quarry adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.4]
+
+Agents told to link "2-3 related articles" pad to reach the count: an article about a
+bookmarking app was linked to an identity server because both are self-hosted. The link
+resolves, so the lint passed it.
+
+### Added
+- **`quarry links [article]`** reports cross-links that look like padding. For a link from
+  A to B it asks how many other articles are closer to A than B is, using a term-weighted
+  vector per article (no model, no index to keep fresh; under four seconds on 546 articles).
+  A link that ranks beyond `[lint] weak_link_rank` (default 50) in both directions is
+  listed. For one article it also offers the closest articles it does not link, and only
+  those that are near in both directions.
+- **`[lint] link_relevance`** (default off): `quarry lint` adds a count of weak links and
+  `quarry finish` prints the weak links around the article it just finished.
+
+It is a prompt to look and never fails a run. Measured on a live wiki: the median existing
+link ranked 7th, 15% of existing links are listed at the default, and of the two padded
+links in the case that prompted it, it catches one. Two rightly linked articles can share
+no vocabulary, and a padded link can share enough to pass. A plain similarity threshold was
+tried first and rejected: padded and real links overlap on the raw score.
+
 ## [0.8.3]
 
 A capture of a 2,300-file monorepo spent its whole 200,000-character budget on the licence

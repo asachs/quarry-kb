@@ -20,6 +20,7 @@ from quarry import (
     ingest,
     lint,
     pending,
+    relevance,
     transcribe,
 )
 from quarry.adapters import registry
@@ -103,6 +104,56 @@ def cmd_finish(args: argparse.Namespace) -> int:
         )
     if res.get("staged"):
         print(f"  committed {len(res['staged'])} file(s): {', '.join(res['staged'])}")
+    if cfg.lint.link_relevance:
+        _print_link_report(cfg, res["article"])
+    return 0
+
+
+def _print_link_report(cfg, article: str, idx=None) -> int:
+    """Weak links around one article, and closer articles it does not link. Returns the
+    number of weak links."""
+    idx = idx or relevance.build(cfg)
+    rel = relevance.wiki_rel(cfg, article)
+    rep = relevance.for_article(idx, rel, cfg.lint.weak_link_rank)
+    wiki = cfg.store.wiki
+    if rep["weak"]:
+        print(
+            f"! {len(rep['weak'])} cross-link(s) look weak: many articles are closer to "
+            "this one than the one linked. Keep a link only if you can say what the two "
+            "share; a wrong link is worse than one link fewer."
+        )
+        for rank, direction, other in rep["weak"]:
+            arrow = {"out": "links to", "in": "is linked from", "both ways": "<->"}[direction]
+            print(f"    {arrow} {wiki}/{other}  (rank {rank})")
+    if rep["closest_unlinked"]:
+        print("  closest articles not linked (candidates, not instructions):")
+        for other in rep["closest_unlinked"]:
+            print(f"    {wiki}/{other}")
+    return len(rep["weak"])
+
+
+def cmd_links(args: argparse.Namespace) -> int:
+    cfg = config.load()
+    if args.rank is not None:
+        cfg.lint.weak_link_rank = args.rank
+    idx = relevance.build(cfg)
+    if args.article:
+        rel = relevance.wiki_rel(cfg, args.article)
+        if rel not in idx.vectors:
+            raise QuarryError(f"not a wiki article: {args.article}")
+        if not _print_link_report(cfg, args.article, idx):
+            print("no weak links")
+        return 0
+    weak = relevance.weak_links(idx, cfg.lint.weak_link_rank)
+    total = sum(len(t) for t in idx.links.values())
+    print(
+        f"{len(weak)} of {total} links rank beyond {cfg.lint.weak_link_rank} in both "
+        "directions (weakest first). A prompt to look, not a verdict:"
+    )
+    for rank, a, b in weak[: args.limit]:
+        print(f"  {rank:4d}  {a} -> {b}")
+    if len(weak) > args.limit:
+        print(f"  ... {len(weak) - args.limit} more (--limit)")
     return 0
 
 
@@ -110,6 +161,9 @@ def cmd_lint(args: argparse.Namespace) -> int:
     cfg = config.load()
     result = lint.run(cfg)
     print(result.report)
+    if cfg.lint.link_relevance:
+        weak = relevance.weak_links(relevance.build(cfg), cfg.lint.weak_link_rank)
+        print(f"Weak links:            {len(weak)}  (report only; details: quarry links)")
     return 1 if result.fails(cfg.lint.fail_on) else 0
 
 
@@ -302,6 +356,12 @@ def build_parser() -> argparse.ArgumentParser:
     pp = sub.add_parser("pending", help="captures that have no wiki article yet")
     pp.add_argument("--json", action="store_true", help="machine-readable output")
     pp.set_defaults(func=cmd_pending)
+
+    pk = sub.add_parser("links", help="cross-links that look like padding (report only)")
+    pk.add_argument("article", nargs="?", help="one article; omit for the whole wiki")
+    pk.add_argument("--rank", type=int, default=None, help="override [lint] weak_link_rank")
+    pk.add_argument("--limit", type=int, default=40, help="rows to print for the whole wiki")
+    pk.set_defaults(func=cmd_links)
 
     ps = sub.add_parser("status", help="is this URL absent, captured or compiled?")
     ps.add_argument("url")

@@ -90,6 +90,9 @@ class LintConfig:
     wikilinks: bool = True  # flag `[[wikilinks]]` in bodies (they don't render or link)
     # Require a verification status on articles whose cited source has images beside it.
     verification_check: bool = False
+    # Report links that rank far from either article's nearest neighbours (never a gate).
+    link_relevance: bool = False
+    weak_link_rank: int = 50  # a link is weak when it ranks beyond this in both directions
     index_file: str = "index.md"  # "" disables the not-in-index check
     fail_on: list[str] = field(default_factory=lambda: ["broken_links", "missing_sources"])
 
@@ -374,6 +377,10 @@ wikilinks = true              # flag [[wikilinks]] outside code (they don't rend
 verification_check = false    # an article whose cited source has images beside it (frames,
                               # slides) must carry `verification: unverified` or
                               # `verification: verified` + `verified_on` + `verified_by`
+link_relevance = false        # report cross-links that look like padding: the two articles
+                              # rank far from each other's nearest neighbours (a prompt to
+                              # look, never a gate; `quarry links` lists them)
+weak_link_rank = 50           # weak = ranks beyond this in both directions
 index_file = "index.md"       # "" disables the not-in-index check
 fail_on = ["broken_links", "missing_sources"]   # which checks make finish/lint exit non-zero
 # add "groundedness" to fail_on to make finish ABORT on ungrounded terms (else advisory-only)
