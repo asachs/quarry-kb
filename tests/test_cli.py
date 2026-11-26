@@ -30,7 +30,18 @@ def test_help_exits_zero(capsys: pytest.CaptureFixture):
 
 @pytest.mark.parametrize(
     "cmd",
-    ["init", "adapters", "ingest", "finish", "lint", "doctor", "related", "densify"],
+    [
+        "init",
+        "adapters",
+        "ingest",
+        "finish",
+        "lint",
+        "doctor",
+        "related",
+        "densify",
+        "pending",
+        "status",
+    ],
 )
 def test_every_command_has_help(cmd: str):
     """ISC-81: every subcommand responds to --help with exit 0."""

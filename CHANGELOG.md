@@ -4,6 +4,20 @@ All notable changes to Quarry are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and Quarry adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.2]
+
+`ingest` needs no model; writing the article does. When the model is rate-limited the
+capture can still be taken, and these two commands let a queue of submitted URLs be drained
+later without asking a model what is outstanding.
+
+### Added
+- **`quarry pending`** lists captures whose raw source no article cites yet (a manifest is
+  the record that an article is owed). `--json` for scripts.
+- **`quarry status <url>`** says whether a URL is `absent`, `captured` or `compiled`. It
+  matches on a normalised URL (tracking parameters, `www.` and trailing slashes ignored) and
+  reads the `source:` line of every raw file as well as the manifests, so a capture made on
+  another machine or by hand counts. `--json` for scripts.
+
 ## [0.8.1]
 
 A review of two months of captures in a live store found three steps that had been failing

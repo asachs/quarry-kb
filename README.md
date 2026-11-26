@@ -62,7 +62,8 @@ quarry finish <slug>         # verify provenance -> lint -> commit (no push unle
 ```
 
 Other commands: `quarry lint`, `quarry adapters`, `quarry related <article>`,
-`quarry densify [--apply]`, `quarry doctor`.
+`quarry densify [--apply]`, `quarry doctor`, `quarry pending` (captures with no article yet),
+`quarry status <url>` (absent, captured or compiled).
 
 The two-call seam is deliberate: `ingest` and `finish` are separate processes, and the
 generative step (writing the article) happens *between* them — done by you or your agent,

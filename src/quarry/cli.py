@@ -8,9 +8,20 @@ here and printed as clean one-liners — never a traceback.
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 
-from quarry import __version__, config, discovery, finish, git, ingest, lint, transcribe
+from quarry import (
+    __version__,
+    config,
+    discovery,
+    finish,
+    git,
+    ingest,
+    lint,
+    pending,
+    transcribe,
+)
 from quarry.adapters import registry
 from quarry.errors import ConfigError, QuarryError
 
@@ -183,9 +194,7 @@ def _discovery_backend_or_exit(cfg) -> object | None:
         print("discovery is disabled ([discovery] backend = none)")
         return None
     if status == discovery.MISSING:
-        raise QuarryError(
-            "qmd not found (optional) — install: npm i -g @tobilu/qmd && qmd embed"
-        )
+        raise QuarryError("qmd not found (optional) — install: npm i -g @tobilu/qmd && qmd embed")
     return backend
 
 
@@ -217,6 +226,36 @@ def cmd_densify(args: argparse.Namespace) -> int:
         return 0
     added = discovery.apply_pairs(cfg, pairs)
     print(f"added {added} links across {len(pairs)} pairs")
+    return 0
+
+
+def cmd_pending(args: argparse.Namespace) -> int:
+    cfg = config.load()
+    rows = pending.pending(cfg)
+    if args.json:
+        print(json.dumps(rows, indent=2, ensure_ascii=False))
+        return 0
+    if not rows:
+        print("nothing pending — every capture with a manifest has an article")
+        return 0
+    print(f"{len(rows)} capture(s) with no article yet (oldest first):")
+    for r in rows:
+        print(f"  {r['slug']}\n    source: {r['source_url']}\n    raw:    {r['raw_path']}")
+    print("\nfor each: write the article citing the raw, then: quarry finish <slug>")
+    return 0
+
+
+def cmd_status(args: argparse.Namespace) -> int:
+    cfg = config.load()
+    res = pending.status(cfg, args.url)
+    if args.json:
+        print(json.dumps(res, indent=2, ensure_ascii=False))
+        return 0
+    print(f"{res['state']}: {args.url}")
+    for r in res["raw_paths"]:
+        print(f"  raw:     {r}")
+    for a in res["articles"]:
+        print(f"  article: {a}")
     return 0
 
 
@@ -259,6 +298,15 @@ def build_parser() -> argparse.ArgumentParser:
     pd.add_argument("--apply", action="store_true", help="add the bidirectional links")
     pd.add_argument("--topk", type=int, default=None, help="override [discovery] densify_topk")
     pd.set_defaults(func=cmd_densify)
+
+    pp = sub.add_parser("pending", help="captures that have no wiki article yet")
+    pp.add_argument("--json", action="store_true", help="machine-readable output")
+    pp.set_defaults(func=cmd_pending)
+
+    ps = sub.add_parser("status", help="is this URL absent, captured or compiled?")
+    ps.add_argument("url")
+    ps.add_argument("--json", action="store_true", help="machine-readable output")
+    ps.set_defaults(func=cmd_status)
 
     return p
 
