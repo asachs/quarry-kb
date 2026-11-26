@@ -50,6 +50,7 @@ class FrontmatterConfig:
     )
     sources_field: str = "sources"
     related_field: str = "related"
+    verification_field: str = "verification"  # unverified | verified, for visual sources
 
 
 @dataclass
@@ -89,6 +90,8 @@ class LintConfig:
     related_check: bool = True  # flag `related:` entries that don't resolve under the wiki root
     frontmatter_check: bool = True  # flag frontmatter that is missing or not valid YAML
     wikilinks: bool = True  # flag `[[wikilinks]]` in bodies (they don't render or link)
+    # Require a verification status on articles whose cited source has images beside it.
+    verification_check: bool = False
     index_file: str = "index.md"  # "" disables the not-in-index check
     fail_on: list[str] = field(
         default_factory=lambda: ["broken_links", "missing_sources"]
@@ -102,6 +105,8 @@ class FinishConfig:
     commit_template: str = "wiki: {slug}"
     stage: str = "scoped"  # scoped (this ingest's files only) | all (git add -A)
     auto_index: bool = False  # add a missing index entry for the article on finish
+    # Stamp `verification: unverified` on an article whose source has images beside it.
+    auto_verification: bool = False
 
 
 @dataclass
@@ -330,6 +335,7 @@ manifest_dir = ".quarry"      # compile-manifests (gitignored)
 required = ["title", "updated", "sources", "related"]   # fields an article must carry
 sources_field = "sources"     # frontmatter field whose entries cite raw/ material
 related_field = "related"     # frontmatter field listing related wiki articles
+verification_field = "verification"   # unverified | verified, for articles from visual sources
 
 [ingest]
 default_ext = "md"
@@ -362,10 +368,14 @@ related_check = true          # flag `related:` entries that aren't a wiki-root-
                               # to an existing article (or a trailing-slash wiki folder)
 frontmatter_check = true      # flag frontmatter that is missing or doesn't parse as YAML
 wikilinks = true              # flag [[wikilinks]] outside code (they don't render or link)
+verification_check = false    # an article whose cited source has images beside it (frames,
+                              # slides) must carry `verification: unverified` or
+                              # `verification: verified` + `verified_on` + `verified_by`
 index_file = "index.md"       # "" disables the not-in-index check
 fail_on = ["broken_links", "missing_sources"]   # which checks make finish/lint exit non-zero
 # add "groundedness" to fail_on to make finish ABORT on ungrounded terms (else advisory-only)
-# other fail_on names: "orphans", "not_indexed", "raw_layout", "related", "frontmatter", "wikilinks"
+# other fail_on names: "orphans", "not_indexed", "raw_layout", "related", "frontmatter",
+# "wikilinks", "verification"
 
 [finish]
 # what `quarry finish` does after provenance + lint pass
@@ -376,6 +386,8 @@ stage = "scoped"              # scoped: commit only this ingest's raw, assets, a
                               # files that link to the article | all: git add -A (pre-0.6 behaviour)
 auto_index = false            # add the article to [lint] index_file if it is missing (placed under
                               # the heading whose entries share its wiki folder)
+auto_verification = false     # stamp `verification: unverified` on an article whose source has
+                              # images beside it and that carries no status yet
 
 [youtube]
 # The youtube adapter always captures the video DESCRIPTION (via yt-dlp) into the raw.

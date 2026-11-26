@@ -118,6 +118,26 @@ def add_index_entry(cfg: Config, article_rel: str) -> bool:
     return True
 
 
+def mark_unverified(cfg: Config, article_rel: str) -> bool:
+    """Stamp ``verification: unverified`` on an article compiled from a visual source.
+
+    Only when the cited source has images beside it and the article carries no status
+    yet: an agent's own ``verified`` (or ``unverified``) is never overwritten. The line
+    is appended to the frontmatter as text, so the rest of the block is left exactly as
+    the author wrote it. Returns True if the file was changed.
+    """
+    article_abs = cfg.root / article_rel
+    text = article_abs.read_text(encoding="utf-8")
+    name = cfg.frontmatter.verification_field
+    if frontmatter.problem(text) or name in frontmatter.parse(text):
+        return False
+    if not lint.visual_sources(article_abs, cfg):
+        return False
+    end = text.find("\n---", 3)
+    article_abs.write_text(f"{text[:end]}\n{name}: unverified{text[end:]}", encoding="utf-8")
+    return True
+
+
 def _links_to(path: Path, article_abs: Path) -> bool:
     if path.suffix != ".md" or not path.exists():
         return False
@@ -163,6 +183,7 @@ def run(cfg: Config, slug: str, *, article: str | None = None, push: bool = Fals
         )
 
     indexed = add_index_entry(cfg, article_rel) if cfg.finish.auto_index else False
+    marked = mark_unverified(cfg, article_rel) if cfg.finish.auto_verification else False
 
     lint_result = None
     if cfg.finish.run_lint:
@@ -191,5 +212,6 @@ def run(cfg: Config, slug: str, *, article: str | None = None, push: bool = Fals
         "pushed": committed and should_push,
         "lint": lint_result,
         "indexed": indexed,
+        "marked_unverified": marked,
         "staged": staged,
     }

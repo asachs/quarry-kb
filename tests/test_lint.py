@@ -421,3 +421,63 @@ def test_groundedness_glued_match_needs_a_real_name(chtmp: Path):
     c = _grounded_store(chtmp, "**Go Up** now.")
     _w(c.root / "raw" / "vid.md", "nothing relevant #lineageoupdate\n")
     assert [t for _, t in lint.run(c).ungrounded] == ["Go Up"]
+
+
+# --- verification status for visual sources (0.8.0) ---------------------------
+
+
+def _visual_store(chtmp: Path, fm_extra: str = "", *, check: bool = True, fail: bool = False):
+    _w(
+        chtmp / "quarry.toml",
+        f"[lint]\nverification_check = {'true' if check else 'false'}\n"
+        + ('fail_on = ["verification"]\n' if fail else ""),
+    )
+    c = config.load(chtmp)
+    _w(c.root / "raw" / "reel.md", "caption\n")
+    _w(c.root / "raw" / "reel" / "frame_0m00s.JPG", "x")
+    _w(c.root / "raw" / "plain.md", "text only\n")
+    _w(c.root / "raw" / "notes" / "a.txt", "a directory with no images\n")
+    _w(c.root / "raw" / "notes.md", "text\n")
+    _w(c.root / "wiki" / "v.md", f"---\ntitle: V\nsources:\n  - raw/reel.md\n{fm_extra}---\n\nB.\n")
+    plain = "---\ntitle: P\nsources:\n  - raw/plain.md\n  - raw/notes.md\n---\n\nB.\n"
+    _w(c.root / "wiki" / "p.md", plain)
+    return c
+
+
+def test_visual_sources_are_those_with_images_beside_them(chtmp: Path):
+    c = _visual_store(chtmp)
+    assert lint.visual_sources(c.root / "wiki" / "v.md", c) == ["raw/reel.md"]
+    assert lint.visual_sources(c.root / "wiki" / "p.md", c) == []
+
+
+def test_verification_missing_status_is_flagged_only_for_visual_sources(chtmp: Path):
+    r = lint.run(_visual_store(chtmp))
+    assert [a for a, _ in r.bad_verification] == ["v.md"]
+    assert "start at `unverified`" in r.bad_verification[0][1]
+    assert "--- VERIFICATION STATUS" in r.report and "Verification status:   1" in r.report
+
+
+def test_verification_unverified_passes_and_is_counted(chtmp: Path):
+    r = lint.run(_visual_store(chtmp, "verification: unverified\n"))
+    assert r.bad_verification == [] and r.unverified == ["v.md"]
+    assert "Unverified (visual):   1" in r.report and "--- VERIFICATION STATUS" not in r.report
+
+
+def test_verification_verified_needs_a_record(chtmp: Path):
+    r = lint.run(_visual_store(chtmp, "verification: verified\nverified_on: 2026-11-26\n"))
+    assert r.bad_verification == [("v.md", "verified without a record (verified_by missing)")]
+    ok = "verification: verified\nverified_on: 2026-11-26\nverified_by: frame audit\n"
+    r = lint.run(_visual_store(chtmp, ok))
+    assert r.bad_verification == [] and r.unverified == []
+
+
+def test_verification_rejects_unknown_status(chtmp: Path):
+    r = lint.run(_visual_store(chtmp, "verification: probably\n"))
+    assert "is not one of unverified, verified" in r.bad_verification[0][1]
+
+
+def test_verification_off_by_default_and_gateable(chtmp: Path):
+    assert lint.run(_visual_store(chtmp, check=False)).bad_verification == []
+    c = _visual_store(chtmp, fail=True)
+    r = lint.run(c)
+    assert r.fails(c.lint.fail_on) and r.summary(c.lint.fail_on) == "1 verification"
