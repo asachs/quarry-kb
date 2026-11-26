@@ -44,9 +44,7 @@ def find_qmd() -> str | None:
 
 
 def _run_qmd(qmd: str, subcmd: str, text: str, cwd: Path | None) -> str:
-    return subprocess.run(
-        [qmd, subcmd, text], cwd=cwd, capture_output=True, text=True
-    ).stdout
+    return subprocess.run([qmd, subcmd, text], cwd=cwd, capture_output=True, text=True).stdout
 
 
 def parse_qmd_hits(out: str, collection: str = "wiki") -> list[tuple[int, str]]:
@@ -106,9 +104,7 @@ class QmdBackend:
         if not self._qmd:
             return None
         try:
-            done = subprocess.run(
-                [self._qmd, "update"], cwd=cwd, capture_output=True, text=True
-            )
+            done = subprocess.run([self._qmd, "update"], cwd=cwd, capture_output=True, text=True)
             return getattr(done, "returncode", None)
         except OSError:
             return -1

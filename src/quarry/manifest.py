@@ -77,7 +77,5 @@ def write(cfg: Config, slug: str, data: dict) -> Path:
 def load(cfg: Config, slug: str) -> dict:
     path = manifest_path(cfg, slug)
     if not path.exists():
-        raise QuarryError(
-            f"no compile-manifest for slug '{slug}' (did you run 'quarry ingest'?)"
-        )
+        raise QuarryError(f"no compile-manifest for slug '{slug}' (did you run 'quarry ingest'?)")
     return json.loads(path.read_text(encoding="utf-8"))

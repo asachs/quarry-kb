@@ -69,8 +69,7 @@ class YouTubeAdapter(Adapter):
             from youtube_transcript_api import YouTubeTranscriptApi
         except ImportError as e:
             raise QuarryError(
-                "youtube adapter needs the [youtube] extra "
-                "(pip install 'quarry-kb[youtube]')"
+                "youtube adapter needs the [youtube] extra (pip install 'quarry-kb[youtube]')"
             ) from e
         fetched = YouTubeTranscriptApi().fetch(vid)
         snippets = getattr(fetched, "snippets", fetched)
@@ -158,9 +157,11 @@ class YouTubeAdapter(Adapter):
         for c in comments:
             if c.get("is_pinned"):
                 author = (c.get("author") or "").lstrip("@")
-                pinned = f"(@{author}) {(c.get('text') or '').strip()}" if author else (
-                    c.get("text") or ""
-                ).strip()
+                pinned = (
+                    f"(@{author}) {(c.get('text') or '').strip()}"
+                    if author
+                    else (c.get("text") or "").strip()
+                )
                 break
         ranked = sorted(
             (c for c in comments if not c.get("is_pinned")),

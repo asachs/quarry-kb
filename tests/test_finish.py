@@ -129,7 +129,7 @@ def _visual_finish_store(root: Path, extra_fm: str = "", *, auto: bool = True) -
     cfg = _build_store(root)
     (root / "quarry.toml").write_text(
         f"[store]\n[finish]\nauto_verification = {'true' if auto else 'false'}\n"
-        "[lint]\nverification_check = true\nfail_on = [\"verification\"]\n"
+        '[lint]\nverification_check = true\nfail_on = ["verification"]\n'
     )
     cfg = config.load(root)
     frames = (root / RAW_REL).with_suffix("")

@@ -156,7 +156,5 @@ def test_no_tomli_backport_anywhere():
 
 def test_only_config_reads_tomllib():
     """ISC-18: conventions flow through Config — only config.py parses TOML."""
-    readers = [
-        py.name for py in _SRC.rglob("*.py") if "tomllib" in py.read_text()
-    ]
+    readers = [py.name for py in _SRC.rglob("*.py") if "tomllib" in py.read_text()]
     assert readers == ["config.py"], f"unexpected tomllib readers: {readers}"

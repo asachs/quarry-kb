@@ -110,9 +110,7 @@ def _store_result(
     raw_abs.write_text(_raw_frontmatter(meta) + body + "\n", encoding="utf-8")
     candidates = discovery.ingest_candidates(cfg, meta["title"], content)
 
-    target_wiki = (
-        f"{cfg.store.wiki}/{topic}/{store.slugify(meta['title'])}.md" if topic else None
-    )
+    target_wiki = f"{cfg.store.wiki}/{topic}/{store.slugify(meta['title'])}.md" if topic else None
     m = manifest.build(
         slug=slug,
         source_url=meta["url"],

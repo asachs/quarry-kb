@@ -87,8 +87,7 @@ def test_all_tokens_expand(chtmp: Path):
         source_id="vid123",
     )
     expected = (
-        c.root / "raw" / "2026" / "06" / "2026-06-28" / "ai" / "vid123"
-        / "hello-world_the-slug.txt"
+        c.root / "raw" / "2026" / "06" / "2026-06-28" / "ai" / "vid123" / "hello-world_the-slug.txt"
     )
     assert p == expected
 

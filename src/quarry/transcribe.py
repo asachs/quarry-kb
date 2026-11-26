@@ -23,8 +23,7 @@ def transcribe(audio_path: str, model: str = _DEFAULT_MODEL) -> str:  # pragma: 
         from faster_whisper import WhisperModel
     except ImportError as e:
         raise QuarryError(
-            "audio transcription needs the [whisper] extra "
-            "(pip install 'quarry-kb[whisper]')"
+            "audio transcription needs the [whisper] extra (pip install 'quarry-kb[whisper]')"
         ) from e
     wm = WhisperModel(model, device="cpu", compute_type="int8")
     segments, _info = wm.transcribe(audio_path)

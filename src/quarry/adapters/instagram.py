@@ -102,6 +102,7 @@ def best_image_url(entry: dict) -> str | None:
     """Largest thumbnail of a carousel entry (the slide image itself)."""
     thumbs = [t for t in entry.get("thumbnails") or [] if t.get("url")]
     if thumbs:
+
         def size(t: dict) -> tuple[int, int]:
             return ((t.get("width") or 0) * (t.get("height") or 0), t.get("preference") or 0)
 

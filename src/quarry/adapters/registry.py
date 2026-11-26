@@ -38,9 +38,7 @@ def discovered_adapters() -> dict[str, type[Adapter]]:
 
     A broken third-party plugin is skipped rather than crashing discovery.
     """
-    out: dict[str, type[Adapter]] = {
-        name: _load_spec(spec) for name, spec in _BUILTIN.items()
-    }
+    out: dict[str, type[Adapter]] = {name: _load_spec(spec) for name, spec in _BUILTIN.items()}
     for ep in entry_points(group=ENTRY_POINT_GROUP):
         try:
             out[ep.name] = ep.load()

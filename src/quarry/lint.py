@@ -159,8 +159,10 @@ def visual_sources(path: Path, cfg: Config) -> list[str]:
             continue
         p = cfg.root / s
         d = p.with_suffix("")
-        if p.is_file() and d.is_dir() and any(
-            f.suffix.lower() in _IMAGE_EXT for f in d.iterdir() if f.is_file()
+        if (
+            p.is_file()
+            and d.is_dir()
+            and any(f.suffix.lower() in _IMAGE_EXT for f in d.iterdir() if f.is_file())
         ):
             out.append(s)
     return out
@@ -313,7 +315,6 @@ def _source_text(path: Path, cfg: Config) -> _SourceText:
     return st
 
 
-
 _DATED_RAW = re.compile(r"^\d{4}-\d{2}-\d{2}[_-]")
 
 
@@ -346,9 +347,7 @@ def run(cfg: Config) -> LintResult:
         raise QuarryError(f"no wiki directory at {wiki} — not a knowledge store")
     index = cfg.lint.index_file
     articles = sorted(
-        str(p.relative_to(wiki))
-        for p in wiki.rglob("*.md")
-        if not (index and p.name == index)
+        str(p.relative_to(wiki)) for p in wiki.rglob("*.md") if not (index and p.name == index)
     )
     aset = set(articles)
 
@@ -432,12 +431,24 @@ def run(cfg: Config) -> LintResult:
 
     total_links = sum(len(v) for v in outgoing.values())
     report = _format(
-        wiki, articles, incoming, outgoing, broken, missing,
-        sorted(orphans), no_outgoing, not_indexed, total_links,
+        wiki,
+        articles,
+        incoming,
+        outgoing,
+        broken,
+        missing,
+        sorted(orphans),
+        no_outgoing,
+        not_indexed,
+        total_links,
         sorted(ungrounded) if cfg.lint.groundedness else None,
         misfiled_raw,
-        sorted(bad_related), sorted(bad_frontmatter), sorted(wikilinks), orphan_related,
-        sorted(bad_verification), len(unverified),
+        sorted(bad_related),
+        sorted(bad_frontmatter),
+        sorted(wikilinks),
+        orphan_related,
+        sorted(bad_verification),
+        len(unverified),
     )
     return LintResult(
         broken=sorted(broken),
@@ -460,10 +471,24 @@ def run(cfg: Config) -> LintResult:
 
 
 def _format(
-    wiki, articles, incoming, outgoing, broken, missing,
-    orphans, no_outgoing, not_indexed, total_links, ungrounded=None, misfiled_raw=(),
-    bad_related=(), bad_frontmatter=(), wikilinks=(), orphan_related=None,
-    bad_verification=(), n_unverified=0,
+    wiki,
+    articles,
+    incoming,
+    outgoing,
+    broken,
+    missing,
+    orphans,
+    no_outgoing,
+    not_indexed,
+    total_links,
+    ungrounded=None,
+    misfiled_raw=(),
+    bad_related=(),
+    bad_frontmatter=(),
+    wikilinks=(),
+    orphan_related=None,
+    bad_verification=(),
+    n_unverified=0,
 ) -> str:
     n = len(articles)
     avg = total_links / n if n else 0
@@ -557,8 +582,11 @@ def _format(
             n_rel = (orphan_related or {}).get(a, 0)
             # Named in other articles' frontmatter only: the backlink exists but isn't
             # a body link, which is the one thing that fixes an orphan.
-            e(f"  {a}  (in {n_rel} related: list{'s' if n_rel != 1 else ''}, no body link)"
-              if n_rel else f"  {a}")
+            e(
+                f"  {a}  (in {n_rel} related: list{'s' if n_rel != 1 else ''}, no body link)"
+                if n_rel
+                else f"  {a}"
+            )
         e("")
     e("--- CATEGORY HEALTH ---")
     for cat in sorted(cats):
