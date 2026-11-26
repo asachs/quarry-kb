@@ -29,3 +29,36 @@ def transcribe(audio_path: str, model: str = _DEFAULT_MODEL) -> str:  # pragma: 
     wm = WhisperModel(model, device="cpu", compute_type="int8")
     segments, _info = wm.transcribe(audio_path)
     return " ".join(seg.text.strip() for seg in segments).strip()
+
+
+def decode_check() -> str | None:
+    """Why audio decoding would fail right now, or ``None`` if it works.
+
+    Decodes a fraction of a second of generated silence through the same path a real
+    transcription takes, without loading a speech model. It exists because this step
+    broke silently once: faster-whisper passed PyAV an argument that PyAV 19 had
+    removed, every transcription raised, and the adapters (which treat audio as
+    best-effort) wrote captures with no transcript for weeks.
+    """
+    if not available():
+        return "the [whisper] extra is not installed"
+    import os
+    import tempfile
+    import wave
+
+    fd, path = tempfile.mkstemp(suffix=".wav")
+    os.close(fd)
+    try:
+        with wave.open(path, "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(16000)
+            w.writeframes(b"\x00\x00" * 3200)
+        from faster_whisper.audio import decode_audio
+
+        decode_audio(path, sampling_rate=16000)
+    except Exception as e:  # noqa: BLE001 - report whatever broke
+        return f"{type(e).__name__}: {e}"
+    finally:
+        os.unlink(path)
+    return None

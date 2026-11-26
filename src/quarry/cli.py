@@ -10,7 +10,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from quarry import __version__, config, discovery, finish, git, ingest, lint
+from quarry import __version__, config, discovery, finish, git, ingest, lint, transcribe
 from quarry.adapters import registry
 from quarry.errors import ConfigError, QuarryError
 
@@ -58,6 +58,17 @@ def cmd_ingest(args: argparse.Namespace) -> int:
         print("  link candidates (existing articles; link the relevant ones from the body):")
         for c in cands:
             print(f"    {c['score']:4d}  {c['path']}  — {c['title']}")
+    else:
+        diag = m.get("discovery") or {}
+        if diag.get("requested") and not diag.get("available"):
+            print("  link candidates:  none — qmd was not found, so no lookup ran")
+        elif diag.get("requested"):
+            rc = diag.get("refresh_exit")
+            stale = f", index refresh exited {rc}" if rc not in (None, 0) else ""
+            print(
+                f"  link candidates:  none — {diag.get('queries', 0)} qmd queries matched "
+                f"{diag.get('paths_hit', 0)} articles{stale}; use `quarry related` after writing"
+            )
     tail = "" if res["target_wiki_path"] else " --article <path>"
     print(f"\nthen: quarry finish {res['slug']}{tail}")
     print("  (finish finds the article by its source citation if you write it elsewhere)")
@@ -138,13 +149,30 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             "pip install 'quarry-kb[instagram]'",
             hard=False,
         )
-    _, status = discovery.check(cfg)
+    if enabled & {"youtube", "instagram"} and transcribe.available():
+        why = transcribe.decode_check()
+        check(
+            "audio transcription can decode audio (faster-whisper + PyAV)",
+            why is None,
+            f"{why} — try: pip install 'av<19' in Quarry's environment",
+            hard=False,
+        )
+    backend, status = discovery.check(cfg)
     check(
         f"discovery backend ({cfg.discovery.backend})",
         status != discovery.MISSING,
         "qmd not found: npm i -g @tobilu/qmd && qmd embed",
         hard=False,
     )
+    indexed = backend.indexed_files(cwd=cfg.root) if hasattr(backend, "indexed_files") else None
+    if indexed is not None:
+        on_disk = sum(1 for _ in (cfg.root / cfg.store.wiki).rglob("*.md"))
+        check(
+            f"qmd index covers the wiki ({indexed} of {on_disk} files indexed)",
+            indexed >= on_disk * 0.95,
+            "the index is stale — run `qmd update` (and `qmd embed` for semantic search)",
+            hard=False,
+        )
     return 0 if ok else 1
 
 

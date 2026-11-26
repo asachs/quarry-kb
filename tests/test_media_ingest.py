@@ -575,3 +575,100 @@ def test_cli_finish_reports_index_and_files(tmp_path, monkeypatch, capsys):
     assert main(["finish", SLUG]) == 0
     out = capsys.readouterr().out
     assert "added to index.md" in out and "committed 4 file(s)" in out
+
+
+# --- capture failures are recorded, not swallowed (0.8.1) ----------------------
+
+
+def _reel_with_video(monkeypatch, a):
+    monkeypatch.setattr(a, "_info", lambda url: {"description": "cap"})
+
+    def video(url, d):
+        p = Path(d) / "video.mp4"
+        p.write_bytes(b"mp4")
+        return str(p)
+
+    monkeypatch.setattr(a, "_video", video)
+    monkeypatch.setattr(a, "_tool", lambda name: False)
+
+
+def test_reel_transcript_failure_becomes_a_capture_note(monkeypatch):
+    a = _ig()
+    _reel_with_video(monkeypatch, a)
+    monkeypatch.setattr(transcribe, "available", lambda: True)
+
+    def boom(path):
+        raise TypeError("open() got an unexpected keyword argument 'metadata_errors'")
+
+    monkeypatch.setattr(transcribe, "transcribe", boom)
+    r = a.fetch("https://www.instagram.com/reel/XYZ/")
+    assert "## Audio transcript" not in r.content
+    assert "## Capture notes" in r.content
+    assert "- audio transcript failed (TypeError: open() got an unexpected keyword" in r.content
+
+
+def test_reel_without_whisper_says_the_transcript_was_skipped(monkeypatch):
+    a = _ig()
+    _reel_with_video(monkeypatch, a)
+    monkeypatch.setattr(transcribe, "available", lambda: False)
+    r = a.fetch("https://www.instagram.com/reel/XYZ/")
+    assert "- audio transcript skipped (the [whisper] extra is not installed)" in r.content
+
+
+def test_decode_check_reports_missing_extra(monkeypatch):
+    monkeypatch.setattr(transcribe, "available", lambda: False)
+    assert transcribe.decode_check() == "the [whisper] extra is not installed"
+
+
+def test_decode_check_reports_a_broken_decoder(monkeypatch):
+    import sys
+    import types
+
+    monkeypatch.setattr(transcribe, "available", lambda: True)
+    fake = types.ModuleType("faster_whisper.audio")
+
+    def decode_audio(path, sampling_rate):
+        assert Path(path).stat().st_size > 44  # a real, non-empty wav was written
+        raise TypeError("open() got an unexpected keyword argument 'metadata_errors'")
+
+    fake.decode_audio = decode_audio
+    monkeypatch.setitem(sys.modules, "faster_whisper", types.ModuleType("faster_whisper"))
+    monkeypatch.setitem(sys.modules, "faster_whisper.audio", fake)
+    assert transcribe.decode_check().startswith("TypeError: open() got an unexpected")
+    fake.decode_audio = lambda path, sampling_rate: None
+    assert transcribe.decode_check() is None
+
+
+def test_ingest_records_why_there_are_no_link_candidates(tmp_path, monkeypatch, capsys):
+    """An empty candidate list says whether the lookup ran, and what it matched."""
+    (tmp_path / "quarry.toml").write_text(
+        "[store]\n[ingest]\nrelated_candidates = 3\n[discovery]\nrefresh = true\n"
+    )
+    (tmp_path / "wiki").mkdir()
+    cfg = config.load(tmp_path)
+
+    class Backend:
+        search = "search"
+
+        def available(self):
+            return True
+
+        def refresh(self, cwd=None):
+            return 3
+
+        def query(self, text, cwd=None):
+            return []
+
+    monkeypatch.setattr(discovery, "get_backend", lambda c: Backend())
+    assert discovery.ingest_candidates(cfg, "Sourdough starter", "flour water salt yeast") == []
+    d = discovery.last_diag
+    assert d["available"] is True and d["refresh_exit"] == 3
+    assert d["queries"] >= 1 and d["paths_hit"] == 0
+
+    class Missing(Backend):
+        def available(self):
+            return False
+
+    monkeypatch.setattr(discovery, "get_backend", lambda c: Missing())
+    assert discovery.ingest_candidates(cfg, "x", "y") == []
+    assert discovery.last_diag == {"requested": 3, "available": False}

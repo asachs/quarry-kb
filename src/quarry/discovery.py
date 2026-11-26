@@ -97,10 +97,34 @@ class QmdBackend:
             return []
         return parse_qmd_hits(_run_qmd(self._qmd, self.search, text, cwd), self._collection)
 
-    def refresh(self, cwd: Path | None = None) -> None:
-        """Re-index the collection (`qmd update`) so just-written articles are searchable."""
-        if self._qmd:
-            subprocess.run([self._qmd, "update"], cwd=cwd, capture_output=True, text=True)
+    def refresh(self, cwd: Path | None = None) -> int | None:
+        """Re-index the collection (`qmd update`) so just-written articles are searchable.
+
+        Returns the exit code (``None`` when there is no qmd) so the caller can record a
+        refresh that did not happen instead of carrying on against a stale index.
+        """
+        if not self._qmd:
+            return None
+        try:
+            done = subprocess.run(
+                [self._qmd, "update"], cwd=cwd, capture_output=True, text=True
+            )
+            return getattr(done, "returncode", None)
+        except OSError:
+            return -1
+
+    def indexed_files(self, cwd: Path | None = None) -> int | None:
+        """How many files qmd has indexed (from `qmd status`), or ``None`` if unknown."""
+        if not self._qmd:
+            return None
+        try:
+            out = subprocess.run(
+                [self._qmd, "status"], cwd=cwd, capture_output=True, text=True
+            ).stdout
+        except OSError:
+            return None
+        m = re.search(r"Total:\s+(\d+)\s+files", out)
+        return int(m.group(1)) if m else None
 
 
 def get_backend(cfg: Config):
@@ -197,6 +221,12 @@ def _prose(content: str) -> str:
     return re.sub(r"\[[^\]]*\]\([^)]*\)", " ", text)
 
 
+# What the last `ingest_candidates` call did, for the manifest: an empty candidate list
+# reads the same whether nothing matched or the lookup never ran, so the difference is
+# recorded. Reset on every call.
+last_diag: dict = {}
+
+
 def ingest_candidates(cfg: Config, title: str, content: str) -> list[dict]:
     """Up to ``[ingest] related_candidates`` existing articles to link a new one to.
 
@@ -206,10 +236,12 @@ def ingest_candidates(cfg: Config, title: str, content: str) -> list[dict]:
     """
     n = cfg.ingest.related_candidates
     backend = get_backend(cfg)
+    last_diag.clear()
+    last_diag.update({"requested": n, "available": backend.available()})
     if n <= 0 or not backend.available():
         return []
     if cfg.discovery.refresh:
-        backend.refresh(cwd=cfg.root)
+        last_diag["refresh_exit"] = backend.refresh(cwd=cfg.root)
     scores: dict[str, int] = {}
     matched: dict[str, int] = {}
     min_matches = 1
@@ -217,14 +249,17 @@ def ingest_candidates(cfg: Config, title: str, content: str) -> list[dict]:
         kws = keywords(f"{title} {_prose(content)[:3000]}", limit=10)
         # one shared generic word is noise; with 3+ keywords, demand two in common
         min_matches = 2 if len(kws) >= 3 else 1
+        last_diag["queries"] = len(kws)
         for kw in kws:
             for score, path in backend.query(kw, cwd=cfg.root):
                 scores[path] = scores.get(path, 0) + score
                 matched[path] = matched.get(path, 0) + 1
     else:
+        last_diag["queries"] = 1
         for score, path in backend.query(f"{title} {content[:280]}", cwd=cfg.root):
             scores[path] = max(scores.get(path, 0), score)
             matched[path] = 1
+    last_diag["paths_hit"] = len(scores)
     index = f"{cfg.store.wiki}/{cfg.lint.index_file}" if cfg.lint.index_file else None
     out = []
     for path, score in sorted(scores.items(), key=lambda kv: (-matched[kv[0]], -kv[1])):

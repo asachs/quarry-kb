@@ -125,5 +125,7 @@ def _store_result(
         assets=asset_paths,
         related_candidates=candidates,
     )
+    if discovery.last_diag:
+        m["discovery"] = dict(discovery.last_diag)
     manifest.write(cfg, slug, m)
     return {"slug": slug, "raw_path": raw_rel, "target_wiki_path": target_wiki, "manifest": m}
