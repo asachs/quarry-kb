@@ -31,7 +31,7 @@ import subprocess
 import tempfile
 import urllib.request
 
-from quarry import transcribe
+from quarry import capture, transcribe
 from quarry.adapters.base import Adapter, FetchResult
 from quarry.config import InstagramConfig
 from quarry.errors import QuarryError
@@ -264,12 +264,24 @@ class InstagramAdapter(Adapter):
         assets: dict[str, str] = {}
         ocr_items: list[tuple[str, str]] = []
         notes: list[str] = []
+        stages: list[dict] = [
+            capture.stage("metadata", capture.OK),
+            capture.stage(
+                "caption",
+                capture.OK if caption else capture.EMPTY,
+                f"{len(caption):,} characters" if caption else "the post has no caption",
+            ),
+        ]
+        stored: list[dict] = []
         transcript = ""
         tmp = tempfile.mkdtemp(prefix="quarry-ig-") if settings.media else None
+        have_ocr = settings.ocr and self._tool("tesseract")
+        why_no_ocr = "ocr = false" if not settings.ocr else "tesseract is not installed"
 
         if carousel:
             entries = [e for e in info.get("entries") or [] if e]
             if tmp:
+                failed = 0
                 for i, entry in enumerate(entries, 1):
                     img = best_image_url(entry)
                     if not img:
@@ -280,12 +292,31 @@ class InstagramAdapter(Adapter):
                         if self._download(img, dest):
                             assets[name] = dest
                     except Exception:  # noqa: BLE001 - one bad slide must not sink the post
+                        failed += 1
                         notes.append(f"slide {i}: download failed")
-                if settings.ocr and self._tool("tesseract"):
+                got = len(assets)
+                status = capture.OK if got == len(entries) else capture.FAILED
+                if not entries:
+                    status = capture.EMPTY
+                stages.append(
+                    capture.stage("slides", status, f"{got} of {len(entries)} slide images saved")
+                )
+                if have_ocr:
                     for n, p in sorted(assets.items()):
                         text = re.sub(r"\s+", " ", self._ocr(p)).strip()
                         if text:
                             ocr_items.append((f"slide {n[6:8]}", text))
+                    stages.append(
+                        capture.stage(
+                            "on-screen text",
+                            capture.OK if ocr_items else capture.EMPTY,
+                            f"text read from {len(ocr_items)} of {got} slides",
+                        )
+                    )
+                else:
+                    stages.append(capture.stage("on-screen text", capture.SKIPPED, why_no_ocr))
+            else:
+                stages.append(capture.stage("slides", capture.SKIPPED, "media = false"))
             body_kind = f"carousel of {len(entries)} slides"
         else:
             body_kind = "video"
@@ -293,23 +324,89 @@ class InstagramAdapter(Adapter):
             if tmp:
                 try:
                     video = self._video(url, tmp)
-                except Exception:  # noqa: BLE001 - media is best-effort
+                except Exception as e:  # noqa: BLE001 - media is best-effort, never silent
                     notes.append("video download failed")
+                    stages.append(capture.stage("video", capture.FAILED, capture.error_detail(e)))
+                else:
+                    stages.append(
+                        capture.stage(
+                            "video",
+                            capture.OK if video else capture.FAILED,
+                            f"{os.path.getsize(video):,} bytes"
+                            if video
+                            else "the download produced no file (an image post, or a block)",
+                        )
+                    )
                 if video:
                     if settings.keep_video:
                         assets["video" + os.path.splitext(video)[1]] = video
+                    if settings.video_store:
+                        try:
+                            rec = capture.store_media(
+                                settings.video_store,
+                                video,
+                                kind="video",
+                                source_url=url,
+                                source_id=self._shortcode(url),
+                            )
+                            stored.append(rec)
+                            stages.append(
+                                capture.stage("video kept", capture.OK, f"sha256 {rec['sha256']}")
+                            )
+                        except Exception as e:  # noqa: BLE001 - keeping is best-effort
+                            stages.append(
+                                capture.stage("video kept", capture.FAILED, capture.error_detail(e))
+                            )
                     if settings.frame_interval > 0 and self._tool("ffmpeg"):
                         dur = self._duration(video)
                         every = float(settings.frame_interval)
-                        if dur and settings.max_frames > 0:
-                            every = max(every, dur / settings.max_frames)
+                        widened = bool(
+                            dur and settings.max_frames > 0 and dur / settings.max_frames > every
+                        )
+                        if widened:
+                            every = dur / settings.max_frames
                         frames = self._frames(video, tmp, every)[: max(settings.max_frames, 0)]
                         for t, f in frames:
                             name = f"frame_{_mmss(t).replace(':', 'm')}s.jpg"
                             assets[name] = f
-                        if settings.ocr and self._tool("tesseract"):
+                        detail = f"{len(frames)} frames, one every {every:.1f} s"
+                        if widened:
+                            detail += (
+                                f" (spacing widened from {settings.frame_interval} s to stay "
+                                f"within {settings.max_frames} frames; brief on-screen states "
+                                "may be missing)"
+                            )
+                        stages.append(
+                            capture.stage("frames", capture.OK if frames else capture.EMPTY, detail)
+                        )
+                        if have_ocr:
                             ocr_items = dedupe_ocr([(_mmss(t), self._ocr(f)) for t, f in frames])
+                            stages.append(
+                                capture.stage(
+                                    "on-screen text",
+                                    capture.OK if ocr_items else capture.EMPTY,
+                                    f"{len(ocr_items)} distinct readings; machine-read, "
+                                    "check numbers against the frames",
+                                )
+                            )
+                        else:
+                            stages.append(
+                                capture.stage("on-screen text", capture.SKIPPED, why_no_ocr)
+                            )
+                    else:
+                        stages.append(
+                            capture.stage(
+                                "frames",
+                                capture.SKIPPED,
+                                "frame_interval = 0"
+                                if settings.frame_interval <= 0
+                                else "ffmpeg is not installed",
+                            )
+                        )
+            else:
+                stages.append(capture.stage("video", capture.SKIPPED, "media = false"))
             if transcribe.available():
+                heard = bool(video)
                 try:
                     if video:
                         transcript = transcribe.transcribe(video)
@@ -317,13 +414,43 @@ class InstagramAdapter(Adapter):
                         with tempfile.TemporaryDirectory() as d:
                             wav = self._audio(url, d)
                             if wav:
+                                heard = True
                                 transcript = transcribe.transcribe(wav)
                 except Exception as e:  # noqa: BLE001 - audio is best-effort, but never silent
                     transcript = ""
                     detail = " ".join(str(e).split())[:160]
                     notes.append(f"audio transcript failed ({type(e).__name__}: {detail})")
-            elif video:
-                notes.append("audio transcript skipped (the [whisper] extra is not installed)")
+                    stages.append(
+                        capture.stage("audio transcript", capture.FAILED, capture.error_detail(e))
+                    )
+                else:
+                    if not heard:
+                        stages.append(
+                            capture.stage(
+                                "audio transcript",
+                                capture.FAILED,
+                                "no audio could be downloaded, so nothing was transcribed",
+                            )
+                        )
+                    else:
+                        stages.append(
+                            capture.stage(
+                                "audio transcript",
+                                capture.OK if transcript else capture.EMPTY,
+                                f"{len(transcript.split())} words; machine transcript, names "
+                                "and numbers may be misheard"
+                                if transcript
+                                else "no speech recognised (music or silence)",
+                            )
+                        )
+            else:
+                if video:
+                    notes.append("audio transcript skipped (the [whisper] extra is not installed)")
+                stages.append(
+                    capture.stage(
+                        "audio transcript", capture.SKIPPED, "the [whisper] extra is not installed"
+                    )
+                )
 
         title = caption.splitlines()[0][:80] if caption else f"instagram-{self._shortcode(url)}"
         parts = [f"# {title}", ""]
@@ -355,4 +482,6 @@ class InstagramAdapter(Adapter):
             },
             assets=assets,
             tmpdir=tmp,
+            stages=stages,
+            stored=stored,
         )

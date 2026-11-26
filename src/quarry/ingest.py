@@ -13,7 +13,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from quarry import discovery, manifest, store
+from quarry import capture, discovery, manifest, store
 from quarry.adapters import registry
 from quarry.config import Config
 from quarry.errors import QuarryError
@@ -104,9 +104,17 @@ def _store_result(
         cfg, title=meta["title"], date=date, slug=slug, topic=topic, source_id=source_id
     )
     asset_paths = _copy_assets(cfg, result.assets, assets_dir)
-    body = content
+    stages = list(result.stages) or [
+        capture.stage(
+            "content",
+            capture.OK if content.strip() else capture.EMPTY,
+            f"{len(content):,} characters",
+        )
+    ]
+    stored = list(result.stored)
+    body = capture.insert_block(content, capture.quality_block(stages, stored))
     if asset_paths:
-        body = content.rstrip("\n") + "\n\n" + _media_section(raw_abs, cfg, asset_paths)
+        body = body.rstrip("\n") + "\n\n" + _media_section(raw_abs, cfg, asset_paths)
     raw_abs.write_text(_raw_frontmatter(meta) + body + "\n", encoding="utf-8")
     candidates = discovery.ingest_candidates(cfg, meta["title"], content)
 
@@ -125,5 +133,9 @@ def _store_result(
     )
     if discovery.last_diag:
         m["discovery"] = dict(discovery.last_diag)
+    m["stages"] = stages
+    m["tools"] = capture.tool_versions()
+    if stored:
+        m["stored"] = stored
     manifest.write(cfg, slug, m)
     return {"slug": slug, "raw_path": raw_rel, "target_wiki_path": target_wiki, "manifest": m}

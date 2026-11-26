@@ -11,6 +11,7 @@ import datetime as _dt
 import urllib.parse
 import urllib.request
 
+from quarry import capture
 from quarry.adapters.base import Adapter, FetchResult
 from quarry.errors import QuarryError
 
@@ -64,4 +65,17 @@ class WebAdapter(Adapter):
     def fetch(self, url: str) -> FetchResult:
         html = self._download(url)
         content, meta = self._extract(html, url)
-        return FetchResult(content=content, metadata=meta)
+        stages = [
+            capture.stage("page fetched", capture.OK, f"{len(html):,} characters of HTML"),
+            capture.stage(
+                "article text",
+                capture.OK if len(content.strip()) >= 200 else capture.EMPTY,
+                f"{len(content):,} characters extracted"
+                + (
+                    ""
+                    if len(content.strip()) >= 200
+                    else " (a block, consent or script-only page?)"
+                ),
+            ),
+        ]
+        return FetchResult(content=content, metadata=meta, stages=stages)

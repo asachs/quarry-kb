@@ -21,7 +21,7 @@ import tempfile
 import urllib.parse
 import urllib.request
 
-from quarry import transcribe
+from quarry import capture, transcribe
 from quarry.adapters.base import Adapter, FetchResult
 from quarry.errors import QuarryError
 
@@ -212,7 +212,34 @@ class YouTubeAdapter(Adapter):
         if want_comments:
             pinned, top = self._select_comments(info.get("comments") or [], top_n)
         transcript = self._transcript_with_fallback(url, vid)
+        stages = [
+            capture.stage(
+                "metadata",
+                capture.OK if meta else capture.FAILED,
+                ""
+                if meta
+                else "title and author could not be fetched; a placeholder title is used",
+            ),
+            capture.stage(
+                "description",
+                capture.OK if description else capture.EMPTY,
+                f"{len(description):,} characters" if description else "none obtained",
+            ),
+            capture.stage(
+                "transcript",
+                capture.OK if transcript.strip() else capture.EMPTY,
+                f"{len(transcript.split()):,} words"
+                if transcript.strip()
+                else "no captions and no audio transcript obtained",
+            ),
+        ]
+        if want_comments:
+            n = len(top) + (1 if pinned else 0)
+            stages.append(
+                capture.stage("comments", capture.OK if n else capture.EMPTY, f"{n} comments kept")
+            )
         return FetchResult(
+            stages=stages,
             content=self._compose(description, pinned, top, transcript),
             metadata={
                 "title": meta.get("title") or f"youtube-{vid}",

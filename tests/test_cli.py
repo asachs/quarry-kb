@@ -41,6 +41,7 @@ def test_help_exits_zero(capsys: pytest.CaptureFixture):
         "densify",
         "pending",
         "links",
+        "canary",
         "status",
     ],
 )

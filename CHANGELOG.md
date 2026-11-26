@@ -4,6 +4,39 @@ All notable changes to Quarry are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and Quarry adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0]
+
+The three highest-ranked changes from a review of the capture stage. Two months of captures
+had failed silently in ways no one could see from a raw file: audio transcription raised on
+every reel for weeks, 28 captures had no media with nothing to say why, and a stage that
+produced nothing looked the same as one that broke.
+
+### Added
+- **Every capture stage records its own outcome.** Adapters report stages (`ok`, `empty`,
+  `skipped`, `failed`, each with a reason). `ingest` writes them into the manifest together
+  with the versions of the tools involved (`stages`, `tools`), puts a `## Capture quality`
+  block at the top of the raw file, and prints any failed or empty stage in the
+  COMPILE-SPEC. The Instagram adapter reports metadata, caption, video or slides, the kept
+  video, frames (including when the spacing was widened to fit the frame cap), on-screen
+  text and audio transcript; YouTube, web, PDF and GitHub report theirs. An adapter that
+  reports nothing gets a single `content` stage. "No audio could be downloaded" is now a
+  failure, distinct from "no speech recognised".
+- **`[instagram] video_store`**: a directory outside the repository where each reel's video
+  is kept, content-addressed (`<store>/<ab>/<sha256>.mp4` plus `index.jsonl` for finding a
+  capture by URL or id), with the hash in the manifest (`stored`) and in the raw. Keeping
+  the video is what makes later improvements retroactive: re-transcribing, re-sampling
+  frames and re-reading text all need it.
+- **`quarry canary`** captures the known-good sources in `[canary] urls` (one per adapter,
+  chosen so every stage should succeed), stores nothing, and fails if any stage is empty or
+  failed, if a capture raises, or if the content shrinks to under half of its best run.
+- **`quarry doctor`** reports the canary (never run, stale beyond `max_age_hours`, or
+  failing, with the first reason) and **symptom rates** over the most recent captures: a
+  stage that failed in more than a third of them, or was empty in more than two thirds.
+
+### Changed
+- The COMPILE-SPEC calls link candidates what they are (keyword matches, candidates and not
+  instructions).
+
 ## [0.8.4]
 
 Agents told to link "2-3 related articles" pad to reach the count: an article about a

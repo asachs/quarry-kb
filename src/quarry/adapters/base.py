@@ -21,12 +21,20 @@ class FetchResult:
     slide images). ``ingest`` copies them into the store per ``[ingest] assets_layout``
     and lists them in the raw and the manifest. ``tmpdir`` (if set) is an adapter-owned
     scratch directory that ``ingest`` deletes once the assets are copied.
+
+    ``stages`` and ``stored`` record what each capture stage did and which media were
+    kept outside the repository; ``ingest`` writes both into the manifest and the raw.
     """
 
     content: str
     metadata: dict = field(default_factory=dict)
     assets: dict[str, str] = field(default_factory=dict)
     tmpdir: str | None = None
+    # What each stage of the capture did (see quarry.capture). Empty for an adapter that
+    # reports none; ``ingest`` then records a single "content" stage itself.
+    stages: list[dict] = field(default_factory=list)
+    # Media kept outside the repository (records from quarry.capture.store_media).
+    stored: list[dict] = field(default_factory=list)
 
 
 class Adapter:
